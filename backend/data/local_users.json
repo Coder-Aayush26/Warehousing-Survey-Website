@@ -4,5 +4,11 @@
     "username": "admin@gmail.com",
     "password": "$2a$10$PDY8diEdXuzCOywrxRbFZ.WvL8ErMUZZcP7dqNKnbV6k8RTNavAT2",
     "createdAt": "2026-05-28T10:43:56.702Z"
+  },
+  {
+    "_id": "user_11xgukcou",
+    "username": "dhanalakshmit097@gmail.com",
+    "password": "$2a$10$lbxRfWC.Bpxq6Xjdt50YYeYcn5.8hmeaQve/XX9.NMJP2yQmA4wAm",
+    "createdAt": "2026-05-29T03:30:09.665Z"
   }
 ]

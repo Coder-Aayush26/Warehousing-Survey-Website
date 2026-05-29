@@ -167,7 +167,9 @@ body {
 .survey-app {
   display: flex;
   flex-direction: column;
+  height: 100dvh;
   min-height: 100dvh;
+  overflow: hidden;
   padding-top: var(--survey-top-bar-height);
 }
 .top-bar {
@@ -213,7 +215,16 @@ body {
 .icon-btn:hover { border-color: var(--accent); color: var(--accent); transform: scale(1.05); }
 .icon-btn.save-btn { width: auto; padding: 0 12px; font-size: 12px; font-weight: 500; }
 
-.survey-body { display: flex; flex: 1; max-width: 1200px; margin: 0 auto; width: 100%; min-width: 0; }
+.survey-body {
+  display: flex;
+  flex: 1;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  height: calc(100dvh - var(--survey-top-bar-height) - var(--survey-bottom-nav-height));
+}
 .sidebar {
   width: 268px;
   flex-shrink: 0;
@@ -221,9 +232,9 @@ body {
   border-right: 1px solid var(--border);
   padding: 1rem 1rem calc(1rem + var(--survey-bottom-nav-height));
   overflow-y: auto;
-  max-height: calc(100vh - var(--survey-top-bar-height) - var(--survey-bottom-nav-height));
+  max-height: 100%;
   position: sticky;
-  top: var(--survey-top-bar-height);
+  top: 0;
   scrollbar-gutter: stable;
 }
 .sidebar-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-light); margin-bottom: 0.75rem; }
@@ -271,7 +282,16 @@ body {
 .section-mini-bar { height: 3px; background: var(--border); border-radius: 2px; margin-top: 5px; }
 .section-mini-fill { height: 100%; background: var(--success); border-radius: 2px; transition: width 0.35s ease; }
 
-.main-content { flex: 1; min-width: 0; padding: 1.5rem 2rem 6rem; }
+.main-content {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  padding: 1.5rem 2rem 4.5rem;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
+  scroll-padding: 1.5rem;
+}
 .section-header { margin-bottom: 1.5rem; animation: fadeUp 0.35s ease; }
 .badge {
   display: inline-block;
@@ -585,9 +605,9 @@ textarea.open-q:focus {
   border-left: 1px solid var(--border);
   padding: 1.25rem 1.25rem calc(1.25rem + var(--survey-bottom-nav-height));
   overflow-y: auto;
-  max-height: calc(100vh - var(--survey-top-bar-height) - var(--survey-bottom-nav-height));
+  max-height: 100%;
   position: sticky;
-  top: var(--survey-top-bar-height);
+  top: 0;
   scrollbar-gutter: stable;
 }
 .right-panel h3 { font-size: 14px; font-weight: 600; margin-bottom: 1rem; }
@@ -945,7 +965,9 @@ textarea.open-q:focus {
   }
 
   .main-content {
-    padding: 0.9rem 0.75rem calc(var(--survey-bottom-nav-height) + 1.25rem + env(safe-area-inset-bottom));
+    height: 100%;
+    padding: 0.9rem 0.75rem 4.25rem;
+    scroll-padding: 0.9rem;
   }
 
   .section-header {

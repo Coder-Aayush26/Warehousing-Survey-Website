@@ -737,6 +737,16 @@ export default function App({ initialScreen = 'welcome', respondent, onFinish })
   const saveTimer = useRef(null);
   const popupTimer = useRef(null);
   const confirmedRef = useRef(confirmed);
+  const mainContentRef = useRef(null);
+
+  const scrollQuestionsToTop = useCallback(() => {
+    const scrollTarget = mainContentRef.current;
+    if (scrollTarget) {
+      scrollTarget.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, []);
 
   useEffect(() => {
     confirmedRef.current = confirmed;
@@ -983,7 +993,7 @@ export default function App({ initialScreen = 'welcome', respondent, onFinish })
     setSectionPopup(null);
     if (sectionIdx < activeSectionTotal - 1) {
       setSectionIdx(i => i + 1);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      scrollQuestionsToTop();
     }
   };
 
@@ -1022,7 +1032,7 @@ export default function App({ initialScreen = 'welcome', respondent, onFinish })
 
     if (sectionIdx < activeSectionTotal - 1) {
       setSectionIdx(i => i + 1);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      scrollQuestionsToTop();
     } else {
       saveDraft(false);
       setScreen('complete');
@@ -1143,7 +1153,7 @@ export default function App({ initialScreen = 'welcome', respondent, onFinish })
                 key={s.num}
                 type="button"
                 className={`section-item${i === sectionIdx ? ' active' : ''}${p.pct === 100 ? ' done' : ''}`}
-                onClick={() => { setSectionIdx(i); setSidebarOpen(false); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                onClick={() => { setSectionIdx(i); setSidebarOpen(false); scrollQuestionsToTop(); }}
               >
                 <span className="section-dot">{s.num}</span>
                 <span style={{ flex: 1, minWidth: 0 }}>
@@ -1156,7 +1166,7 @@ export default function App({ initialScreen = 'welcome', respondent, onFinish })
           })}
         </aside>
 
-        <main className="main-content">
+        <main className="main-content" ref={mainContentRef}>
           <div className="section-header">
             <span className="badge">Section {sectionIdx + 1} of {activeSectionTotal}</span>
             <h2>{sec.title}</h2>
@@ -1214,7 +1224,7 @@ export default function App({ initialScreen = 'welcome', respondent, onFinish })
 
       <nav className="bottom-nav">
         <div className="bottom-nav-inner">
-          <button type="button" className="btn-secondary" disabled={sectionIdx === 0} onClick={() => { setSectionIdx(i => i - 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>{'\u2190'} Previous</button>
+          <button type="button" className="btn-secondary" disabled={sectionIdx === 0} onClick={() => { setSectionIdx(i => i - 1); scrollQuestionsToTop(); }}>{'\u2190'} Previous</button>
           <span className="section-counter">Section <strong>{sectionIdx + 1}</strong> of {activeSectionTotal}</span>
           <div className="nav-group">
             <button type="button" className="btn-primary" onClick={handleAdvanceSection}>
