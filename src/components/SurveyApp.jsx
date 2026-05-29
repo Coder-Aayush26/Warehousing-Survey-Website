@@ -448,7 +448,7 @@ function WelcomeScreen({ hasDraft, onStart, onRestore, onClear }) {
         <div className="stats-row">
           <div className="stat-chip"><strong>75</strong> questions</div>
           <div className="stat-chip"><strong>15</strong> sections</div>
-          <div className="stat-chip"><strong>25-45</strong> min</div>
+          <div className="stat-chip"><strong>10-15</strong> min</div>
         </div>
         {hasDraft && (
           <div className="restore-banner">

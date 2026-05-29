@@ -2,7 +2,6 @@ import { safeStorage } from '../utils/safeStorage.js';
 
 const API_URL = '/api';
 
-// Helper to safely parse JSON responses
 async function parseJSON(response) {
   try {
     const text = await response.text();
@@ -14,42 +13,63 @@ async function parseJSON(response) {
   }
 }
 
+async function authenticatedFetch(url, options = {}) {
+  const token = safeStorage.getItem('authToken');
+  const headers = {
+    ...options.headers,
+    Authorization: `Bearer ${token}`,
+  };
+
+  const res = await fetch(url, { ...options, headers });
+
+  if (res.status === 401) {
+    safeStorage.removeItem('authToken');
+    window.dispatchEvent(new CustomEvent('auth:expired'));
+    throw new Error('Session expired. Please log in again.');
+  }
+
+  return res;
+}
+
 export const apiClient = {
-  async login(username, password, captchaToken) {
+  async login(username, password) {
     const res = await fetch(`${API_URL}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password, captchaToken })
+      body: JSON.stringify({ username, password }),
     });
     const data = await parseJSON(res);
-    if (!res.ok) {
-      throw new Error(data?.error || 'Login failed');
-    }
+    if (!res.ok) throw new Error(data?.error || 'Login failed');
     return data;
   },
 
-  async loginOrRegister(username, password, captchaToken) {
-    const res = await fetch(`${API_URL}/auth/login-or-register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password, captchaToken })
-    });
-    const data = await parseJSON(res);
-    if (!res.ok) {
-      throw new Error(data?.error || 'Login failed');
+  async verifySession() {
+    const token = safeStorage.getItem('authToken');
+    if (!token) return null;
+
+    try {
+      const res = await fetch(`${API_URL}/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        safeStorage.removeItem('authToken');
+        return null;
+      }
+      return await parseJSON(res);
+    } catch {
+      return null;
     }
-    return data;
+  },
+
+  logout() {
+    safeStorage.removeItem('authToken');
   },
 
   async saveSurvey(respondent, answers, confirmed, confirmedSnapshot, skipped, progress) {
-    const token = safeStorage.getItem('authToken');
-    const res = await fetch(`${API_URL}/survey/save`, {
+    const res = await authenticatedFetch(`${API_URL}/survey/save`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({ respondent, answers, confirmed, confirmedSnapshot, skipped, progress })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ respondent, answers, confirmed, confirmedSnapshot, skipped, progress }),
     });
     const data = await parseJSON(res);
     if (!res.ok) throw new Error(data?.error || 'Failed to save survey');
@@ -57,60 +77,31 @@ export const apiClient = {
   },
 
   async getDraft() {
-    const token = safeStorage.getItem('authToken');
-    const res = await fetch(`${API_URL}/survey/draft`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
+    const res = await authenticatedFetch(`${API_URL}/survey/draft`);
     const data = await parseJSON(res);
     if (!res.ok) throw new Error(data?.error || 'Failed to fetch draft');
     return data;
   },
 
   async submitSurvey(surveyId) {
-    const token = safeStorage.getItem('authToken');
-    const res = await fetch(`${API_URL}/survey/submit`, {
+    const res = await authenticatedFetch(`${API_URL}/survey/submit`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({ surveyId })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ surveyId }),
     });
     const data = await parseJSON(res);
     if (!res.ok) throw new Error(data?.error || 'Failed to submit survey');
     return data;
   },
 
-  async getRoleSuggestions(roleCode, role, questionNums) {
-    const token = safeStorage.getItem('authToken');
-    const params = new URLSearchParams();
-    if (roleCode) params.set('roleCode', roleCode);
-    if (role) params.set('role', role);
-    if (Array.isArray(questionNums) && questionNums.length) {
-      params.set('questions', questionNums.join(','));
-    }
-
-    const res = await fetch(`${API_URL}/survey/role-suggestions?${params.toString()}`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    const data = await parseJSON(res);
-    if (!res.ok) throw new Error(data?.error || 'Failed to fetch role suggestions');
-    return data?.suggestions || {};
-  },
-
   async saveReferrals(referrals) {
-    const token = safeStorage.getItem('authToken');
-    const res = await fetch(`${API_URL}/survey/referral`, {
+    const res = await authenticatedFetch(`${API_URL}/survey/referral`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({ referrals })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ referrals }),
     });
     const data = await parseJSON(res);
     if (!res.ok) throw new Error(data?.error || 'Failed to save referrals');
     return data;
-  }
+  },
 };
-

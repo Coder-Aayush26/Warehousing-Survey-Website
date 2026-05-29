@@ -2,11 +2,13 @@
   font-family: 'Inter', sans-serif;
   font-size: 0.9rem;
   line-height: 1.4;
-  color: #444;
-  background: #f9f9f9;
-  border: 1px solid #ddd;
+  color: #333;
+  background: #fff8e1; /* light yellow background */
+  border: 1px solid #ffb300;
+  border-left: 4px solid #ff9800; /* accent bar */
   border-radius: 8px;
   padding: 0.8rem 1rem;
   margin-top: 1rem;
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  font-weight: 500;
 }

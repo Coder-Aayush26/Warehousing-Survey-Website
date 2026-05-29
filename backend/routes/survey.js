@@ -1,6 +1,6 @@
 import express from 'express';
 import Survey from '../models/Survey.js';
-import { verifyToken } from '../middleware/auth.js';
+import { requireAdmin, verifyToken } from '../middleware/auth.js';
 import { localDb } from '../localDb.js';
 
 const router = Router();
@@ -150,7 +150,7 @@ router.post('/submit', verifyToken, async (req, res) => {
 });
 
 // Get submitted surveys (for admin/analytics)
-router.get('/all', verifyToken, async (req, res) => {
+router.get('/all', verifyToken, requireAdmin, async (req, res) => {
   try {
     const isConnected = req.app.locals.mongoConnected();
     if (!isConnected) {

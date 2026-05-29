@@ -7,6 +7,7 @@ import dotenv from 'dotenv';
 import dns from 'dns';
 import authRoutes from './routes/auth.js';
 import surveyRoutes from './routes/survey.js';
+import User from './models/User.js';
 
 // Force Node.js to resolve IPv4 first (prevents querySrv ECONNREFUSED in Node 18+ on Windows)
 const app = express();
@@ -57,10 +58,39 @@ if (uriSchemeMatch) {
   }
 }
 
+async function ensureAdminUser() {
+  const adminUsername = process.env.ADMIN_USERNAME?.trim();
+  const adminPassword = process.env.ADMIN_PASSWORD?.trim();
+
+  if (!adminUsername || !adminPassword) {
+    console.warn('Admin user was not seeded because ADMIN_USERNAME and ADMIN_PASSWORD are not configured.');
+    return;
+  }
+
+  const existing = await User.findOne({ username: adminUsername });
+  if (!existing) {
+    const user = new User({ username: adminUsername, password: adminPassword });
+    await user.save();
+    console.log(`Admin user created (${adminUsername})`);
+    return;
+  }
+
+  const passwordMatches = await existing.comparePassword(adminPassword);
+  if (!passwordMatches) {
+    existing.password = adminPassword;
+    await existing.save();
+    console.log(`Admin user password updated (${adminUsername})`);
+    return;
+  }
+
+  console.log(`Admin user ready (${adminUsername})`);
+}
+
 mongoose.connect(mongoUri)
-  .then(() => {
+  .then(async () => {
     mongoConnected = true;
     console.log('✓ MongoDB connected successfully');
+    await ensureAdminUser();
   })
   .catch(err => {
     mongoConnected = false;
