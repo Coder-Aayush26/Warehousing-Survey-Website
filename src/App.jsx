@@ -14,6 +14,7 @@ import SurveyAdminPage from './pages/SurveyAdminPage.jsx';
 import { apiClient } from './api/client.js';
 import { STORAGE_KEY } from './data/questions.js';
 import { safeStorage } from './utils/safeStorage.js';
+import { getRespondentDraftKey, readDraftForRespondent } from './utils/draftStorage.js';
 import ReCAPTCHA from 'react-google-recaptcha';
 import './styles/disclaimer.css';
 
@@ -79,7 +80,7 @@ export default function App() {
     navigate(routes.credentials);
   }, []);
 
-  const restoreDraftState = useCallback(async () => {
+  const restoreDraftState = useCallback(async (usernameForDraft) => {
     const draft = await apiClient.getDraft();
     if (!draft || Object.keys(draft).length === 0) return;
 
@@ -95,7 +96,8 @@ export default function App() {
     }
 
     setShowRoleSelection(true);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+    safeStorage.setItem(STORAGE_KEY, JSON.stringify({
+      respondentKey: getRespondentDraftKey({ username: usernameForDraft || draft.respondent?.username || draft.respondent?.email }),
       answers: draft.answers || {},
       confirmed: draft.confirmed || {},
       confirmedSnapshot: draft.confirmedSnapshot || {},
@@ -114,7 +116,7 @@ export default function App() {
         setCredentials({ username: user.username });
         if (!user.isAdmin) {
           try {
-            await restoreDraftState();
+            await restoreDraftState(user.username);
           } catch (draftError) {
             console.error('Failed to restore draft from session:', draftError);
           }
@@ -198,7 +200,9 @@ export default function App() {
       }
 
       safeStorage.setItem('authToken', loginData.token);
-      safeStorage.removeItem(STORAGE_KEY);
+      if (!readDraftForRespondent(STORAGE_KEY, { username })) {
+        safeStorage.removeItem(STORAGE_KEY);
+      }
       setLoginError('');
       setCredentials({ username });
 
@@ -208,7 +212,7 @@ export default function App() {
       }
 
       try {
-        await restoreDraftState();
+        await restoreDraftState(username);
       } catch (draftError) {
         console.error('Failed to load existing draft:', draftError);
       }
@@ -328,23 +332,16 @@ export default function App() {
   }
 
   if (route === routes.questions || route === routes.finished) {
-    let hasDraft = false;
-    try {
-      const draftData = safeStorage.getItem(STORAGE_KEY);
-      if (draftData) {
-        const draft = JSON.parse(draftData);
-        hasDraft = Object.keys(draft.answers || {}).length > 2;
-      }
-    } catch (e) {
-      console.error('Error checking for draft:', e);
-    }
+    const respondent = { ...credentials, ...respondentDetails, role: role.label, roleCode: role.code };
+    const draft = readDraftForRespondent(STORAGE_KEY, respondent);
+    const hasDraft = Object.keys(draft?.answers || {}).length > 2;
     const screen = route === routes.finished ? 'complete' : (hasDraft ? 'welcome' : 'survey');
 
     return (
       <SurveyCredential
         initialScreen={screen}
         onFinish={() => navigate(routes.finished)}
-        respondent={{ ...credentials, ...respondentDetails, role: role.label, roleCode: role.code }}
+        respondent={respondent}
       />
     );
   }
@@ -353,7 +350,10 @@ export default function App() {
     return (
       <>
         <Navbar onLogout={handleLogout} />
-        <SurveyHome onStartSurvey={() => navigate(routes.roles)} />
+        <SurveyHome
+          onStartSurvey={() => navigate(routes.roles)}
+          respondent={credentials}
+        />
         <Footer />
       </>
     );
@@ -372,7 +372,10 @@ export default function App() {
   return (
     <>
       <Navbar onLogout={handleLogout} />
-      <SurveyHome onStartSurvey={() => navigate(routes.roles)} />
+      <SurveyHome
+        onStartSurvey={() => navigate(routes.roles)}
+        respondent={credentials}
+      />
       <Footer />
     </>
   );
