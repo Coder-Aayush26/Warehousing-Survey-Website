@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import './styles/navbar.css';
 import './styles/hero.css';
@@ -13,6 +13,7 @@ import SurveyCredential from './pages/SurveyCredential.jsx';
 import SurveyAdminPage from './pages/SurveyAdminPage.jsx';
 import { apiClient } from './api/client.js';
 import { STORAGE_KEY } from './data/questions.js';
+import { safeStorage } from './utils/safeStorage.js';
 import ReCAPTCHA from 'react-google-recaptcha';
 import './styles/disclaimer.css';
 
@@ -50,6 +51,8 @@ export default function App() {
   const [route, setRoute] = useState(getCurrentRoute());
   const [isLoading, setIsLoading] = useState(false);
   const [captchaToken, setCaptchaToken] = useState(null);
+  const captchaRef = useRef(null);
+  const recaptchaSiteKey = import.meta.env.VITE_RECAPTCHA_SITE_KEY;
 
   const navigate = (nextRoute) => {
     window.history.pushState({}, '', nextRoute);
@@ -75,6 +78,7 @@ export default function App() {
 
   const handleCredentialsSubmit = async (event) => {
     event.preventDefault();
+    setLoginError('');
     setIsLoading(true);
     const formData = new FormData(event.currentTarget);
     const username = formData.get('username')?.trim();
@@ -97,39 +101,15 @@ export default function App() {
         if (password !== 'survey2026') {
           throw new Error('Invalid admin password.');
         }
-        const { token } = await apiClient.login(username, password);
-        localStorage.setItem('authToken', token);
+        const { token } = await apiClient.login(username, password, captchaToken);
+        safeStorage.setItem('authToken', token);
         setLoginError('');
         setCredentials({ username });
         navigate(routes.admin);
       } else {
-        let token;
-        try {
-          // Attempt to login first
-          const data = await apiClient.login(username, password);
-          token = data.token;
-        } catch (loginError) {
-          // If login fails (e.g. user does not exist), register them on the fly
-          try {
-            const regRes = await fetch('/api/auth/register', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ username, password })
-            });
-            if (regRes.ok) {
-              // Successfully registered, now login to get token
-              const data = await apiClient.login(username, password);
-              token = data.token;
-            } else {
-              // Registration failed (e.g. username taken but wrong password entered)
-              throw new Error('Invalid credentials or username already taken.');
-            }
-          } catch (regError) {
-            throw new Error(regError.message || 'Invalid username or password.');
-          }
-        }
+        const { token } = await apiClient.loginOrRegister(username, password, captchaToken);
 
-        localStorage.setItem('authToken', token);
+        safeStorage.setItem('authToken', token);
         setLoginError('');
         setCredentials({ username });
 
@@ -152,8 +132,8 @@ export default function App() {
               }
             }
             setShowRoleSelection(true);
-            // Populate localStorage so that when the Survey app starts, it resumes the draft!
-            localStorage.setItem(STORAGE_KEY, JSON.stringify({
+            // Populate browser storage so that when the Survey app starts, it resumes the draft.
+            safeStorage.setItem(STORAGE_KEY, JSON.stringify({
               answers: draft.answers || {},
               confirmed: draft.confirmed || {},
               confirmedSnapshot: draft.confirmedSnapshot || {},
@@ -172,6 +152,8 @@ export default function App() {
       }
     } catch (error) {
       setLoginError(error.message || 'Invalid username or password.');
+      setCaptchaToken(null);
+      captchaRef.current?.reset();
     } finally {
       setIsLoading(false);
     }
@@ -207,13 +189,22 @@ export default function App() {
               Password
               <input name="password" type="password" placeholder="Password" required disabled={isLoading} />
             </label>
-            {/* ReCAPTCHA */}
-            <ReCAPTCHA
-              sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY}
-              onChange={(value) => setCaptchaToken(value)}
-            />
+            {recaptchaSiteKey ? (
+              <ReCAPTCHA
+                ref={captchaRef}
+                sitekey={recaptchaSiteKey}
+                onChange={(value) => setCaptchaToken(value)}
+                onExpired={() => setCaptchaToken(null)}
+                onErrored={() => {
+                  setCaptchaToken(null);
+                  setLoginError('Captcha could not load. Please refresh and try again.');
+                }}
+              />
+            ) : (
+              <p className="gate-error">Captcha is not configured. Add VITE_RECAPTCHA_SITE_KEY to .env.</p>
+            )}
           {loginError && <p className="gate-error">{loginError}</p>}
-          <button className="hero-action" type="submit" disabled={isLoading}>
+          <button className="hero-action" type="submit" disabled={isLoading || !recaptchaSiteKey}>
             {isLoading ? 'Logging in...' : 'Continue'}
           </button>
           <p className="survey-disclaimer">No personal identity or individual information will be disclosed at any stage of the study. We assure you that all information provided in this survey will remain anonymous and confidential.</p>
@@ -286,7 +277,7 @@ export default function App() {
   if (route === routes.questions || route === routes.finished) {
     let hasDraft = false;
     try {
-      const draftData = localStorage.getItem(STORAGE_KEY);
+      const draftData = safeStorage.getItem(STORAGE_KEY);
       if (draftData) {
         const draft = JSON.parse(draftData);
         hasDraft = Object.keys(draft.answers || {}).length > 2;

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { jsPDF } from 'jspdf';
 import { apiClient } from '../api/client.js';
+import { safeStorage } from '../utils/safeStorage.js';
 
 import { SECTIONS, QUESTIONS, AUTOFILL_RULES, STORAGE_KEY } from '../data/questions.js';
 
@@ -35,7 +36,7 @@ function isAnswered(qnum, answers, skipped) {
     if (q.type === 'likert') return q.rows.every((_, i) => v[i] != null && v[i] !== '');
     if (q.type === 'ranking') {
       const filled = Object.values(v).filter(Boolean).length;
-      return filled >= q.items.length;
+      return filled >= (q.rankTop || q.items.length);
     }
     return Object.keys(v).length > 0;
   }
@@ -57,8 +58,15 @@ function rankMapFromOrder(order) {
   return map;
 }
 
-function defaultRankingOrder(items) {
-  return items.map((_, i) => i);
+function selectedOrderFromRankMap(items, val) {
+  if (!val || !Object.keys(val).length) return [];
+  return [...items.keys()]
+    .filter(i => val[i] != null && val[i] !== '')
+    .sort((a, b) => {
+      const ra = parseInt(val[a], 10) || 999;
+      const rb = parseInt(val[b], 10) || 999;
+      return ra - rb;
+    });
 }
 
 function getRankBadgeClass(rank) {
@@ -69,7 +77,7 @@ function getRankBadgeClass(rank) {
 function typeHint(q) {
   if (q.type === 'mcq') return q.single ? (q.maxSelect ? `Select up to ${q.maxSelect}` : 'Single choice') : 'Multiple choice';
   if (q.type === 'likert') return 'Rate 1 (low) to 5 (high)';
-  if (q.type === 'ranking') return q.rankTop ? `Drag to reorder - top ${q.rankTop} highlighted` : 'Drag to order by priority';
+  if (q.type === 'ranking') return q.rankTop ? `Tap choices in order - rank top ${q.rankTop}` : 'Tap choices in priority order';
   if (q.type === 'open') return 'Open text';
   return '';
 }
@@ -165,80 +173,60 @@ function ToastContainer({ toasts }) {
   );
 }
 
-/* -- Drag and drop ranking -- */
+/* -- Tap to rank -- */
 function RankingDragDrop({ q, value, onChange, disabled }) {
-  const defaultOrder = defaultRankingOrder(q.items);
-  const [order, setOrder] = useState(() => orderFromRankMap(q.items, value));
-  const dragItem = useRef(null);
-  const [dragOver, setDragOver] = useState(null);
-  const rankTop = q.rankTop != null ? q.rankTop : q.items.length;
+  const rankTarget = q.rankTop != null ? q.rankTop : q.items.length;
+  const [order, setOrder] = useState(() => selectedOrderFromRankMap(q.items, value).slice(0, rankTarget));
 
   useEffect(() => {
-    const rankCount = value ? Object.keys(value).filter(k => value[k]).length : 0;
-    if (rankCount < q.items.length) {
-      const initial = rankMapFromOrder(defaultOrder);
-      setOrder(defaultOrder);
-      onChange(initial);
-    } else {
-      setOrder(orderFromRankMap(q.items, value));
-    }
-  }, [q.label]);
+    setOrder(selectedOrderFromRankMap(q.items, value).slice(0, rankTarget));
+  }, [q.label, value, rankTarget]);
 
   const commit = (newOrder) => {
-    setOrder(newOrder);
-    onChange(rankMapFromOrder(newOrder));
+    const next = newOrder.slice(0, rankTarget);
+    setOrder(next);
+    onChange(rankMapFromOrder(next));
   };
 
-  const onDragStart = (e, listIdx) => {
+  const addRank = (itemIdx) => {
     if (disabled) return;
-    dragItem.current = listIdx;
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', String(listIdx));
-    requestAnimationFrame(() => e.target.closest('.rank-dnd-item')?.classList.add('dragging'));
+    if (order.includes(itemIdx)) return;
+    if (order.length >= rankTarget) {
+      window.__showToast?.(`Remove a ranked choice before adding another.`);
+      return;
+    }
+    commit([...order, itemIdx]);
   };
 
-  const onDragEnd = (e) => {
-    e.target.closest('.rank-dnd-item')?.classList.remove('dragging');
-    dragItem.current = null;
-    setDragOver(null);
+  const removeRank = (itemIdx) => {
+    if (disabled) return;
+    commit(order.filter(idx => idx !== itemIdx));
   };
 
-  const onDragOver = (e, listIdx) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    setDragOver(listIdx);
-  };
-
-  const onDrop = (e, targetIdx) => {
-    e.preventDefault();
-    const from = dragItem.current;
-    if (from == null || from === targetIdx) return;
+  const moveRank = (listIdx, direction) => {
+    if (disabled) return;
+    const targetIdx = listIdx + direction;
+    if (targetIdx < 0 || targetIdx >= order.length) return;
     const next = [...order];
-    const [moved] = next.splice(from, 1);
-    next.splice(targetIdx, 0, moved);
+    [next[listIdx], next[targetIdx]] = [next[targetIdx], next[listIdx]];
     commit(next);
-    setDragOver(null);
-    dragItem.current = null;
+  };
+
+  const resetRanks = () => {
+    if (disabled) return;
+    commit([]);
   };
 
   const renderItem = (itemIdx, listIdx) => {
     const rank = listIdx + 1;
-    const isPriority = q.rankTop != null && listIdx < rankTop;
     const badgeClass = getRankBadgeClass(rank);
     const isDouble = rank >= 10;
     return (
       <div
         key={itemIdx}
         role="listitem"
-        className={`rank-dnd-item ranked-top${isPriority ? ' rank-priority' : ' rank-rest'}${dragOver === listIdx ? ' drag-over' : ''}`}
-        draggable={!disabled}
-        onDragStart={(e) => onDragStart(e, listIdx)}
-        onDragEnd={onDragEnd}
-        onDragOver={(e) => onDragOver(e, listIdx)}
-        onDragLeave={() => setDragOver(null)}
-        onDrop={(e) => onDrop(e, listIdx)}
+        className="rank-dnd-item ranked-top rank-priority"
       >
-        <span className="rank-drag-handle" aria-hidden="true">::</span>
         <span
           className={`rank-badge ${badgeClass}${isDouble ? ' rank-double' : ''}`}
           aria-label={`Rank ${rank}`}
@@ -246,32 +234,72 @@ function RankingDragDrop({ q, value, onChange, disabled }) {
           {rank}
         </span>
         <span className="rank-dnd-label">{q.items[itemIdx]}</span>
-        {q.rankTop != null && q.items.length > rankTop && isPriority && (
-          <span className="rank-priority-tag">Top {rankTop}</span>
-        )}
+        <div className="rank-actions" aria-label={`Actions for rank ${rank}`}>
+          <button type="button" onClick={() => moveRank(listIdx, -1)} disabled={disabled || listIdx === 0}>Up</button>
+          <button type="button" onClick={() => moveRank(listIdx, 1)} disabled={disabled || listIdx === order.length - 1}>Down</button>
+          <button type="button" onClick={() => removeRank(itemIdx)} disabled={disabled}>Remove</button>
+        </div>
       </div>
     );
   };
 
+  const availableItems = q.items.map((_, i) => i).filter(i => !order.includes(i));
+  const progressText = `${order.length}/${rankTarget} ranked`;
+  const isComplete = order.length >= rankTarget;
+
   return (
     <div className="rank-dnd">
       <div className="rank-dnd-hint">
-        <span className="rank-drag-handle" aria-hidden="true">::</span>
         <span>
           {q.rankTop != null
-            ? `All ${q.items.length} choices are ranked. Drag to reorder - positions 1-${rankTop} are your top priorities.`
-            : `Drag to order all ${q.items.length} items (1 = highest priority)`}
+            ? `Tap choices below in priority order until your top ${rankTarget} are ranked.`
+            : `Tap choices below in priority order until all ${rankTarget} are ranked.`}
         </span>
+        <strong className="rank-dnd-count">{progressText}</strong>
       </div>
-      {q.rankTop != null && q.items.length > rankTop && (
+      {q.rankTop != null && q.items.length > rankTarget && (
         <div className="rank-dnd-note">
-          Every option starts ranked 1{'\u2013'}{q.items.length}. Highlighted rows are your top {rankTop}.
+          Only your top {rankTarget} choices will be saved for this question.
         </div>
       )}
-      <div className="rank-dnd-list" role="list">
-        {order.map((itemIdx, listIdx) => renderItem(itemIdx, listIdx))}
+      <div className="rank-section-heading">
+        <span>Your ranking</span>
+        {order.length > 0 && (
+          <button type="button" className="rank-reset-btn" onClick={resetRanks} disabled={disabled}>Reset</button>
+        )}
       </div>
-    </div>
+      <div className="rank-dnd-list" role="list" aria-label="Ranked choices">
+        {order.length ? order.map((itemIdx, listIdx) => renderItem(itemIdx, listIdx)) : (
+          <div className="rank-empty">No choices ranked yet.</div>
+        )}
+      </div>
+      {!isComplete && (
+        <>
+          <div className="rank-section-heading">
+            <span>Tap to add next rank</span>
+          </div>
+          <div className="rank-choice-grid" role="list" aria-label="Available choices">
+            {availableItems.map(itemIdx => (
+              <button
+                key={itemIdx}
+                type="button"
+                className="rank-choice"
+                onClick={() => addRank(itemIdx)}
+                disabled={disabled}
+              >
+                <span className="rank-badge unranked">{order.length + 1}</span>
+                <span>{q.items[itemIdx]}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+      {isComplete && (
+        <div className="rank-dnd-note rank-complete-note">
+          Ranking complete. Use Up, Down, or Remove to adjust your order.
+        </div>
+      )}
+      </div>
   );
 }
 
@@ -767,10 +795,16 @@ export default function App({ initialScreen = 'welcome', respondent, onFinish })
   }, [sectionIdx]);
   const activeSections = getFilteredSections(respondent?.roleCode);
   const activeQuestionNums = activeSections.flatMap(section => section.qs);
+  const commonQuestionNums = activeQuestionNums.filter(qnum => {
+    const applicability = String(QUESTIONS[qnum]?.applicability || '').toUpperCase();
+    return applicability.split(',').map(item => item.trim()).includes('ALL');
+  });
+  const commonQuestionKey = commonQuestionNums.join(',');
   const activeQuestionTotal = activeQuestionNums.length;
   const activeSectionTotal = activeSections.length;
   const totalAnswered = activeQuestionNums.filter(qnum => isAnswered(qnum, answers, skipped)).length;
   const pct = activeQuestionTotal ? Math.round((totalAnswered / activeQuestionTotal) * 100) : 0;
+  const roleSuggestionsLoadedFor = useRef('');
 
   const showToast = useCallback((msg, type = '') => {
     const id = Date.now() + Math.random();
@@ -785,7 +819,7 @@ export default function App({ initialScreen = 'welcome', respondent, onFinish })
       const draftData = {
         answers, confirmed, confirmedSnapshot, autofilled, skipped, currentSectionIdx: sectionIdx, savedAt: Date.now()
       };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(draftData));
+      const draftSavedLocally = safeStorage.setItem(STORAGE_KEY, JSON.stringify(draftData));
 
       apiClient.saveSurvey(respondent, answers, confirmed, confirmedSnapshot, skipped, {
         currentSectionIdx: sectionIdx,
@@ -793,7 +827,7 @@ export default function App({ initialScreen = 'welcome', respondent, onFinish })
         totalQuestions: activeQuestionTotal
       }).catch(err => console.error('Backend save failed:', err));
 
-      if (showMsg) showToast('Progress saved', 'success');
+      if (showMsg) showToast(draftSavedLocally ? 'Progress saved' : 'Progress saved for this session', 'success');
     } catch { if (showMsg) showToast('Could not save'); }
   }, [answers, confirmed, confirmedSnapshot, autofilled, skipped, sectionIdx, showToast, respondent, totalAnswered, activeQuestionTotal]);
 
@@ -803,7 +837,7 @@ export default function App({ initialScreen = 'welcome', respondent, onFinish })
   }, [saveDraft]);
 
   useEffect(() => {
-    const d = localStorage.getItem(STORAGE_KEY);
+    const d = safeStorage.getItem(STORAGE_KEY);
     if (d) {
       try {
         const p = JSON.parse(d);
@@ -811,6 +845,36 @@ export default function App({ initialScreen = 'welcome', respondent, onFinish })
       } catch { /* ignore */ }
     }
   }, []);
+
+  useEffect(() => {
+    const roleKey = respondent?.roleCode || respondent?.role || '';
+    if (!roleKey || !commonQuestionNums.length) return;
+    if (roleSuggestionsLoadedFor.current === roleKey) return;
+
+    roleSuggestionsLoadedFor.current = roleKey;
+
+    apiClient.getRoleSuggestions(respondent?.roleCode, respondent?.role, commonQuestionNums)
+      .then(suggestions => {
+        if (!suggestions || !Object.keys(suggestions).length) return;
+
+        setAutofilled(prev => {
+          const next = { ...prev };
+          Object.entries(suggestions).forEach(([qnum, suggestion]) => {
+            if (!next[qnum]) next[qnum] = suggestion;
+          });
+          return next;
+        });
+        setAnswers(prev => {
+          const next = { ...prev };
+          Object.entries(suggestions).forEach(([qnum, suggestion]) => {
+            if (next[qnum] || skipped[qnum] || confirmed[qnum]) return;
+            next[qnum] = suggestion;
+          });
+          return next;
+        });
+      })
+      .catch(err => console.error('Role suggestion fetch failed:', err));
+  }, [respondent?.roleCode, respondent?.role, commonQuestionKey]);
 
   const applyDraft = (draft) => {
     const ans = draft.answers || {};
@@ -1046,17 +1110,17 @@ export default function App({ initialScreen = 'welcome', respondent, onFinish })
         <WelcomeScreen
           hasDraft={hasDraft}
           onStart={() => {
-            const d = localStorage.getItem(STORAGE_KEY);
+            const d = safeStorage.getItem(STORAGE_KEY);
             if (d) try { applyDraft(JSON.parse(d)); } catch { /* */ }
             setScreen('survey');
           }}
           onRestore={() => {
-            const d = localStorage.getItem(STORAGE_KEY);
+            const d = safeStorage.getItem(STORAGE_KEY);
             if (d) applyDraft(JSON.parse(d));
             setScreen('survey');
           }}
           onClear={() => {
-            localStorage.removeItem(STORAGE_KEY);
+            safeStorage.removeItem(STORAGE_KEY);
             setHasDraft(false);
             setAnswers({});
             setConfirmed({});

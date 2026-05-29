@@ -1,3 +1,5 @@
+import { safeStorage } from '../utils/safeStorage.js';
+
 const API_URL = '/api';
 
 // Helper to safely parse JSON responses
@@ -13,11 +15,24 @@ async function parseJSON(response) {
 }
 
 export const apiClient = {
-  async login(username, password) {
+  async login(username, password, captchaToken) {
     const res = await fetch(`${API_URL}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
+      body: JSON.stringify({ username, password, captchaToken })
+    });
+    const data = await parseJSON(res);
+    if (!res.ok) {
+      throw new Error(data?.error || 'Login failed');
+    }
+    return data;
+  },
+
+  async loginOrRegister(username, password, captchaToken) {
+    const res = await fetch(`${API_URL}/auth/login-or-register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password, captchaToken })
     });
     const data = await parseJSON(res);
     if (!res.ok) {
@@ -27,7 +42,7 @@ export const apiClient = {
   },
 
   async saveSurvey(respondent, answers, confirmed, confirmedSnapshot, skipped, progress) {
-    const token = localStorage.getItem('authToken');
+    const token = safeStorage.getItem('authToken');
     const res = await fetch(`${API_URL}/survey/save`, {
       method: 'POST',
       headers: {
@@ -42,7 +57,7 @@ export const apiClient = {
   },
 
   async getDraft() {
-    const token = localStorage.getItem('authToken');
+    const token = safeStorage.getItem('authToken');
     const res = await fetch(`${API_URL}/survey/draft`, {
       headers: { 'Authorization': `Bearer ${token}` }
     });
@@ -52,7 +67,7 @@ export const apiClient = {
   },
 
   async submitSurvey(surveyId) {
-    const token = localStorage.getItem('authToken');
+    const token = safeStorage.getItem('authToken');
     const res = await fetch(`${API_URL}/survey/submit`, {
       method: 'POST',
       headers: {
@@ -66,8 +81,25 @@ export const apiClient = {
     return data;
   },
 
+  async getRoleSuggestions(roleCode, role, questionNums) {
+    const token = safeStorage.getItem('authToken');
+    const params = new URLSearchParams();
+    if (roleCode) params.set('roleCode', roleCode);
+    if (role) params.set('role', role);
+    if (Array.isArray(questionNums) && questionNums.length) {
+      params.set('questions', questionNums.join(','));
+    }
+
+    const res = await fetch(`${API_URL}/survey/role-suggestions?${params.toString()}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await parseJSON(res);
+    if (!res.ok) throw new Error(data?.error || 'Failed to fetch role suggestions');
+    return data?.suggestions || {};
+  },
+
   async saveReferrals(referrals) {
-    const token = localStorage.getItem('authToken');
+    const token = safeStorage.getItem('authToken');
     const res = await fetch(`${API_URL}/survey/referral`, {
       method: 'POST',
       headers: {

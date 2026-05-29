@@ -9,6 +9,56 @@ function Router() {
   return express.Router();
 }
 
+function canonicalAnswer(value) {
+  if (Array.isArray(value)) {
+    return JSON.stringify([...value].map(String).sort());
+  }
+
+  if (value && typeof value === 'object') {
+    const sorted = {};
+    Object.keys(value).sort().forEach(key => {
+      sorted[key] = value[key];
+    });
+    return JSON.stringify(sorted);
+  }
+
+  return JSON.stringify(value);
+}
+
+function getRoleSuggestionsFromSurveys(surveys, questionNums) {
+  const suggestions = {};
+
+  questionNums.forEach(qnum => {
+    const counts = new Map();
+
+    surveys.forEach(survey => {
+      const answers = survey.answers || {};
+      const confirmed = survey.confirmed || {};
+      const skipped = survey.skipped || {};
+      const answer = answers[qnum] ?? answers[String(qnum)];
+      const isConfirmed = confirmed[qnum] || confirmed[String(qnum)];
+      const isSkipped = skipped[qnum] || skipped[String(qnum)];
+
+      if (isSkipped || !isConfirmed || answer == null || answer === '') return;
+
+      const key = canonicalAnswer(answer);
+      const current = counts.get(key) || { count: 0, answer };
+      current.count += 1;
+      counts.set(key, current);
+    });
+
+    const total = Array.from(counts.values()).reduce((sum, item) => sum + item.count, 0);
+    if (!total) return;
+
+    const top = Array.from(counts.values()).sort((a, b) => b.count - a.count)[0];
+    if (total === 1 || top.count > total / 2) {
+      suggestions[qnum] = top.answer;
+    }
+  });
+
+  return suggestions;
+}
+
 // Save/update survey draft
 router.post('/save', verifyToken, async (req, res) => {
   try {
@@ -110,6 +160,45 @@ router.get('/all', verifyToken, async (req, res) => {
 
     const surveys = await Survey.find({ status: 'submitted' });
     res.json(surveys);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Suggest answers based on majority responses from submitted surveys with the same role.
+router.get('/role-suggestions', verifyToken, async (req, res) => {
+  try {
+    const roleCode = String(req.query.roleCode || '').trim();
+    const role = String(req.query.role || '').trim();
+    const questionNums = String(req.query.questions || '')
+      .split(',')
+      .map(item => Number(item.trim()))
+      .filter(Number.isFinite);
+
+    if (!questionNums.length || (!roleCode && !role)) {
+      return res.json({ suggestions: {} });
+    }
+
+    const matchesRole = survey => {
+      const respondent = survey.respondent || {};
+      if (roleCode && respondent.roleCode === roleCode) return true;
+      if (role && respondent.role === role) return true;
+      return false;
+    };
+
+    const isConnected = req.app.locals.mongoConnected();
+    let surveys;
+
+    if (!isConnected) {
+      surveys = (await localDb.getAllSubmittedSurveys()).filter(matchesRole);
+    } else {
+      const roleFilter = roleCode
+        ? { 'respondent.roleCode': roleCode }
+        : { 'respondent.role': role };
+      surveys = await Survey.find({ status: 'submitted', ...roleFilter }).lean();
+    }
+
+    res.json({ suggestions: getRoleSuggestionsFromSurveys(surveys, questionNums) });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

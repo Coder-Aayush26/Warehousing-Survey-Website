@@ -397,10 +397,11 @@ body {
 .likert-btn:nth-child(1).selected { background: linear-gradient(135deg, #ef4444, #f87171); border-color: #ef4444; }
 .likert-btn:nth-child(5).selected { background: linear-gradient(135deg, var(--success), #34d399); border-color: var(--success); }
 
-/* Drag & drop ranking */
+/* Tap-to-rank questions */
 .rank-dnd-hint {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
   font-size: 12px;
   color: var(--accent-hover);
@@ -409,6 +410,11 @@ body {
   background: linear-gradient(90deg, var(--bg-info), var(--purple-bg));
   border-radius: var(--radius-sm);
   border: 1px solid #bfdbfe;
+}
+.rank-dnd-count {
+  color: var(--accent);
+  font-weight: 700;
+  white-space: nowrap;
 }
 .rank-dnd-progress {
   display: flex;
@@ -450,6 +456,13 @@ body {
   border-radius: var(--radius-sm);
   margin-bottom: 12px;
 }
+.rank-complete-note {
+  margin-top: 12px;
+  margin-bottom: 0;
+  color: var(--success);
+  background: var(--success-bg);
+  border-color: #bbf7d0;
+}
 .rank-priority-tag {
   font-size: 10px;
   background: linear-gradient(135deg, #fef08a, #fde047);
@@ -477,25 +490,11 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--bg);
-  cursor: grab;
+  cursor: default;
   transition: all var(--transition);
   user-select: none;
 }
-.rank-dnd-item:active { cursor: grabbing; }
 .rank-dnd-item:hover { border-color: var(--accent); box-shadow: var(--shadow-sm); }
-.rank-dnd-item.dragging {
-  opacity: 0.45;
-  transform: scale(0.98);
-  box-shadow: var(--shadow-md);
-  border-color: var(--accent);
-  background: var(--bg-info);
-}
-.rank-dnd-item.drag-over {
-  border-color: var(--success);
-  border-style: dashed;
-  background: var(--success-bg);
-  transform: translateY(2px);
-}
 .rank-dnd-item.ranked-top {
   border-color: #93c5fd;
   background: linear-gradient(90deg, #fff 0%, #f8fafc 100%);
@@ -562,6 +561,89 @@ body {
   border: 1px dashed var(--border-strong);
 }
 .rank-dnd-label { flex: 1; font-size: 14px; line-height: 1.4; min-width: 0; overflow-wrap: anywhere; }
+.rank-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 12px 0 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.rank-empty {
+  padding: 14px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  font-size: 13px;
+  background: var(--bg-soft);
+}
+.rank-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.rank-choice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 54px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.35;
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.rank-choice:hover {
+  border-color: var(--accent);
+  background: var(--bg-info);
+  box-shadow: var(--shadow-sm);
+}
+.rank-choice:focus-visible,
+.rank-actions button:focus-visible,
+.rank-reset-btn:focus-visible {
+  outline: 3px solid rgba(24,95,165,.18);
+  outline-offset: 2px;
+}
+.rank-choice:disabled,
+.rank-actions button:disabled,
+.rank-reset-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.rank-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.rank-actions button,
+.rank-reset-btn {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  padding: 6px 9px;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.rank-actions button:hover:not(:disabled),
+.rank-reset-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--bg-info);
+}
 
 textarea.open-q {
   width: 100%;
@@ -1041,11 +1123,17 @@ textarea.open-q:focus {
     line-height: 1.35;
   }
 
+  .rank-dnd-hint {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
   .rank-dnd-item {
-    align-items: center;
+    align-items: flex-start;
     gap: 8px;
     padding: 10px;
     min-width: 0;
+    flex-wrap: wrap;
   }
 
   .rank-drag-handle {
@@ -1068,6 +1156,26 @@ textarea.open-q:focus {
   }
 
   .rank-dnd-label {
+    font-size: 13px;
+    flex-basis: calc(100% - 44px);
+  }
+
+  .rank-actions {
+    width: 100%;
+    padding-left: 40px;
+  }
+
+  .rank-actions button {
+    flex: 1;
+    min-height: 34px;
+  }
+
+  .rank-choice-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .rank-choice {
+    min-height: 50px;
     font-size: 13px;
   }
 

@@ -3,6 +3,7 @@ import { apiClient } from '../api/client.js';
 import { generateDetailedExcel } from '../utils/excelExport.js';
 import Navbar from '../components/Navbar.jsx';
 import Footer from '../components/Footer.jsx';
+import { safeStorage } from '../utils/safeStorage.js';
 import '../data/questions.js';
 import '../styles/admin.css';
 import SurveyDashboardPage from '../pages/SurveyDashboardPage.jsx';
@@ -32,7 +33,7 @@ export default function SurveyAdminPage() {
       setLoading(true);
       const response = await fetch('/api/survey/all', {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+          'Authorization': `Bearer ${safeStorage.getItem('authToken') || ''}`
         }
       });
       if (!response.ok) throw new Error('Failed to fetch surveys');

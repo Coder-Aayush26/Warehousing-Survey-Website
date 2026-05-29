@@ -34,6 +34,42 @@
 
 const { SECTIONS, QUESTIONS, AUTOFILL_RULES, STORAGE_KEY } = window.SURVEY_DATA;
 const SKIP_LABEL = 'Skipped \u2014 prefer not to answer';
+const memoryStorage = new Map();
+const safeStorage = {
+  getStorage() {
+    try { return window.localStorage; } catch { return null; }
+  },
+  getItem(key) {
+    try {
+      const stored = this.getStorage()?.getItem(key);
+      return stored ?? memoryStorage.get(key) ?? null;
+    } catch {
+      return memoryStorage.get(key) ?? null;
+    }
+  },
+  setItem(key, value) {
+    memoryStorage.set(key, String(value));
+    try {
+      const storage = this.getStorage();
+      if (!storage) return false;
+      storage.setItem(key, value);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+  removeItem(key) {
+    memoryStorage.delete(key);
+    try {
+      const storage = this.getStorage();
+      if (!storage) return false;
+      storage.removeItem(key);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+};
 
 /* -- Utils -- */
 function isAnswered(qnum, answers, skipped) {
@@ -563,7 +599,7 @@ function App() {
 
   const saveDraft = useCallback((showMsg) => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      safeStorage.setItem(STORAGE_KEY, JSON.stringify({
         answers, confirmed, confirmedSnapshot, autofilled, skipped, currentSectionIdx: sectionIdx, savedAt: Date.now()
       }));
       if (showMsg) showToast('Progress saved', 'success');
@@ -576,7 +612,7 @@ function App() {
   }, [saveDraft]);
 
   useEffect(() => {
-    const d = localStorage.getItem(STORAGE_KEY);
+    const d = safeStorage.getItem(STORAGE_KEY);
     if (d) {
       try {
         const p = JSON.parse(d);
@@ -705,17 +741,17 @@ function App() {
         <WelcomeScreen
           hasDraft={hasDraft}
           onStart={() => {
-            const d = localStorage.getItem(STORAGE_KEY);
+            const d = safeStorage.getItem(STORAGE_KEY);
             if (d) try { applyDraft(JSON.parse(d)); } catch { /* */ }
             setScreen('survey');
           }}
           onRestore={() => {
-            const d = localStorage.getItem(STORAGE_KEY);
+            const d = safeStorage.getItem(STORAGE_KEY);
             if (d) applyDraft(JSON.parse(d));
             setScreen('survey');
           }}
           onClear={() => {
-            localStorage.removeItem(STORAGE_KEY);
+            safeStorage.removeItem(STORAGE_KEY);
             setHasDraft(false);
             setAnswers({});
             setConfirmed({});

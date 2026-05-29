@@ -1,21 +1,26 @@
 import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
 import dns from 'dns';
 import authRoutes from './routes/auth.js';
 import surveyRoutes from './routes/survey.js';
 
 // Force Node.js to resolve IPv4 first (prevents querySrv ECONNREFUSED in Node 18+ on Windows)
+const app = express();
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Load root frontend env first so shared values such as RECAPTCHA_SECRET_KEY
+// are available, then let backend/.env override backend-specific values.
+dotenv.config({ path: path.join(__dirname, '../.env') });
+dotenv.config({ path: path.join(__dirname, '.env'), override: true });
+
+// Force Node.js to resolve IPv4 first (prevents querySrv ECONNREFUSED in Node 18+ on Windows)
 dns.setDefaultResultOrder('ipv4first');
 
-dotenv.config();
-
-const app = express();
 const PORT = process.env.PORT || 5000;
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Middleware
 app.use(cors());

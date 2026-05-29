@@ -4,13 +4,14 @@ import SurveyCard from '../components/SurveyCard.jsx';
 import ProgressBar from '../components/ProgressBar.jsx';
 import { STORAGE_KEY, SECTIONS } from '../data/questions.js';
 import { isAnswered } from '../utils/surveyUtils.js';
+import { safeStorage } from '../utils/safeStorage.js';
 
 export default function SurveyHome({ onStartSurvey }) {
   const [progress, setProgress] = useState(0);
 
   useEffect(() => {
     try {
-      const draftData = localStorage.getItem(STORAGE_KEY);
+      const draftData = safeStorage.getItem(STORAGE_KEY);
       if (draftData) {
         const draft = JSON.parse(draftData);
         const answers = draft.answers || {};
