@@ -211,6 +211,7 @@ export default function App() {
         return;
       }
 
+      // Fetch existing draft from the database to restore state
       try {
         await restoreDraftState(username);
       } catch (draftError) {
