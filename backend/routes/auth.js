@@ -7,13 +7,6 @@ import { getJwtSecret } from '../config/jwt.js';
 import { isAdminUsername, verifyToken } from '../middleware/auth.js';
 
 const router = express.Router();
-const DEFAULT_ADMIN_USERNAME = 'admin@gmail.com';
-
-function isAdminUsername(username) {
-  const configuredAdmin = process.env.ADMIN_USERNAME?.trim() || DEFAULT_ADMIN_USERNAME;
-  return String(username || '').trim().toLowerCase() === configuredAdmin.toLowerCase();
-}
-
 // ── GET /api/auth/me ──────────────────────────────────────────────────────────
 // Validates the bearer token and returns the logged-in user's info.
 // The frontend calls this once on page load to silently restore the session.
