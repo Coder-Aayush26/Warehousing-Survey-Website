@@ -4,6 +4,7 @@ import { apiClient } from '../api/client.js';
 import { safeStorage } from '../utils/safeStorage.js';
 
 import { SECTIONS, QUESTIONS, AUTOFILL_RULES, STORAGE_KEY } from '../data/questions.js';
+import { getRespondentDraftKey, readDraftForRespondent } from '../utils/draftStorage.js';
 
 function questionAppliesToRole(q, roleCode) {
   if (!q) return false;
@@ -70,7 +71,7 @@ function getRankBadgeClass(rank) {
 function typeHint(q) {
   if (q.type === 'mcq') return q.single ? (q.maxSelect ? `Select up to ${q.maxSelect}` : 'Single choice') : 'Multiple choice';
   if (q.type === 'likert') return 'Rate 1 (low) to 5 (high)';
-  if (q.type === 'ranking') return q.rankTop ? `Use dropdowns to rank - top ${q.rankTop} highlighted` : 'Use dropdowns to order by priority';
+  if (q.type === 'ranking') return q.rankTop ? `Drag to reorder - top ${q.rankTop} highlighted` : 'Drag to order by priority';
   if (q.type === 'open') return 'Open text';
   return '';
 }
@@ -166,99 +167,106 @@ function ToastContainer({ toasts }) {
   );
 }
 
-/* -- Dropdown ranking -- */
-function RankingDropdown({ q, value, onChange, disabled }) {
+/* -- Drag and drop ranking -- */
+function RankingDragDrop({ q, value, onChange, disabled }) {
   const defaultOrder = defaultRankingOrder(q.items);
+  const [order, setOrder] = useState(() => orderFromRankMap(q.items, value));
+  const dragItem = useRef(null);
+  const [dragOver, setDragOver] = useState(null);
   const rankTop = q.rankTop != null ? q.rankTop : q.items.length;
 
   useEffect(() => {
     const rankCount = value ? Object.keys(value).filter(k => value[k]).length : 0;
     if (rankCount < q.items.length) {
       const initial = rankMapFromOrder(defaultOrder);
+      setOrder(defaultOrder);
       onChange(initial);
+    } else {
+      setOrder(orderFromRankMap(q.items, value));
     }
   }, [q.label]);
 
-  const onSelectRank = (itemIdx, rankValue) => {
+  const commit = (newOrder) => {
+    setOrder(newOrder);
+    onChange(rankMapFromOrder(newOrder));
+  };
+
+  const onDragStart = (e, listIdx) => {
     if (disabled) return;
-    const newRankMap = value ? { ...value } : {};
-    
-    if (rankValue === '') {
-      delete newRankMap[itemIdx];
-    } else {
-      let swapItem = null;
-      for (const key in newRankMap) {
-        if (newRankMap[key] === rankValue && key !== String(itemIdx)) {
-          swapItem = key;
-          break;
-        }
-      }
-      
-      if (swapItem !== null) {
-        const currentRankOfSelectedItem = newRankMap[itemIdx];
-        newRankMap[swapItem] = currentRankOfSelectedItem || '';
-      }
-      
-      newRankMap[itemIdx] = rankValue;
-    }
-    onChange(newRankMap);
+    dragItem.current = listIdx;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(listIdx));
+    requestAnimationFrame(() => e.target.closest('.rank-dnd-item')?.classList.add('dragging'));
   };
 
-  const getRankForItem = (itemIdx) => {
-    return value && value[itemIdx] ? value[itemIdx] : '';
+  const onDragEnd = (e) => {
+    e.target.closest('.rank-dnd-item')?.classList.remove('dragging');
+    dragItem.current = null;
+    setDragOver(null);
   };
 
-  // Get items ordered by their assigned rank
-  const getOrderedItems = () => {
-    const items = q.items.map((_, i) => ({ idx: i, rank: getRankForItem(i) }));
-    return items.sort((a, b) => {
-      const ra = parseInt(a.rank, 10) || 999;
-      const rb = parseInt(b.rank, 10) || 999;
-      return ra - rb;
-    });
+  const onDragOver = (e, listIdx) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOver(listIdx);
   };
 
-  const renderRankRow = (position, itemData) => {
-    const itemIdx = itemData.idx;
-    const currentRank = getRankForItem(itemIdx);
-    const isPriority = q.rankTop != null && parseInt(currentRank, 10) <= rankTop && currentRank;
-    const badgeClass = getRankBadgeClass(position);
-    
+  const onDrop = (e, targetIdx) => {
+    e.preventDefault();
+    const from = dragItem.current;
+    if (from == null || from === targetIdx) return;
+    const next = [...order];
+    const [moved] = next.splice(from, 1);
+    next.splice(targetIdx, 0, moved);
+    commit(next);
+    setDragOver(null);
+    dragItem.current = null;
+  };
+
+  const renderItem = (itemIdx, listIdx) => {
+    const rank = listIdx + 1;
+    const isPriority = q.rankTop != null && listIdx < rankTop;
+    const badgeClass = getRankBadgeClass(rank);
+    const isDouble = rank >= 10;
     return (
       <div
         key={itemIdx}
-        className={`rank-select-row ranked-top${isPriority ? ' rank-priority' : ' rank-rest'}`}
+        role="listitem"
+        className={`rank-dnd-item ranked-top${isPriority ? ' rank-priority' : ' rank-rest'}${dragOver === listIdx ? ' drag-over' : ''}`}
+        draggable={!disabled}
+        onDragStart={(e) => onDragStart(e, listIdx)}
+        onDragEnd={onDragEnd}
+        onDragOver={(e) => onDragOver(e, listIdx)}
+        onDragLeave={() => setDragOver(null)}
+        onDrop={(e) => onDrop(e, listIdx)}
       >
+        <span className="rank-drag-handle" aria-hidden="true">::</span>
         <span
-          className={`rank-badge ${badgeClass}`}
-          aria-label={`Position ${position}`}
+          className={`rank-badge ${badgeClass}${isDouble ? ' rank-double' : ''}`}
+          aria-label={`Rank ${rank}`}
         >
-          {position}
+          {rank}
         </span>
-        <span className="rank-option-label">{q.items[itemIdx]}</span>
-        <div className="rank-select-wrapper">
-          <label className="rank-label">Rank:</label>
-          <select
-            className="rank-select"
-            value={currentRank}
-            disabled={disabled}
-            aria-label={`Select rank for ${q.items[itemIdx]}`}
-            onChange={(e) => onSelectRank(itemIdx, e.target.value)}
-          >
-            <option value="">—</option>
-            {q.items.map((_, rankNum) => {
-              const rankValue = String(rankNum + 1);
-              return (
-                <option key={rankValue} value={rankValue}>
-                  {rankValue}
-                </option>
-              );
-            })}
-          </select>
-        </div>
-        {q.rankTop != null && parseInt(currentRank, 10) <= rankTop && currentRank && (
+        <span className="rank-dnd-label">{q.items[itemIdx]}</span>
+        {q.rankTop != null && q.items.length > rankTop && isPriority && (
           <span className="rank-priority-tag">Top {rankTop}</span>
         )}
+        <label className="rank-select-control">
+          <span>Rank</span>
+          <select
+            value={ranks[itemIdx] || ''}
+            disabled={disabled}
+            onChange={(e) => updateRank(itemIdx, e.target.value)}
+            aria-label={`Rank for ${item}`}
+          >
+            <option value="">Select</option>
+            {q.items.map((_, rankIdx) => (
+              <option key={rankIdx + 1} value={String(rankIdx + 1)}>
+                {rankIdx + 1}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
     );
   };
@@ -270,25 +278,17 @@ function RankingDropdown({ q, value, onChange, disabled }) {
       <div className="rank-dnd-hint">
         <span>
           {q.rankTop != null
-            ? `Select ranks 1-${rankTop} for your top ${rankTop} priorities.`
-            : `Select rank numbers for each item (1 = highest priority).`}
+            ? `All ${q.items.length} choices are ranked. Drag to reorder - positions 1-${rankTop} are your top priorities.`
+            : `Drag to order all ${q.items.length} items (1 = highest priority)`}
         </span>
       </div>
       {q.rankTop != null && q.items.length > rankTop && (
         <div className="rank-dnd-note">
-          Items ranked 1-{rankTop} are highlighted as your top priorities.
+          Every option starts ranked 1{'\u2013'}{q.items.length}. Highlighted rows are your top {rankTop}.
         </div>
       )}
-      <div className="rank-select-list">
-        {orderedItems.map((item, position) => renderRankRow(position + 1, item))}
-      </div>
-      <div className="rank-current-order" aria-live="polite">
-        <div className="rank-current-title">Current ranking</div>
-        <ol className="rank-current-list">
-          {orderedItems.map((item) => (
-            <li key={item.idx}>{q.items[item.idx]}</li>
-          ))}
-        </ol>
+      <div className="rank-dnd-list" role="list">
+        {order.map((itemIdx, listIdx) => renderItem(itemIdx, listIdx))}
       </div>
     </div>
   );
@@ -399,7 +399,7 @@ function QuestionBlock({ qnum, answers, confirmed, autofilled, skipped, onAnswer
         <LikertQuestion q={q} value={value} onChange={onAnswer} disabled={false} />
       )}
       {q.type === 'ranking' && (
-        <RankingDropdown q={q} value={value} onChange={onAnswer} disabled={false} />
+        <RankingDragDrop q={q} value={value} onChange={onAnswer} disabled={false} />
       )}
       {q.type === 'open' && (
         <>
@@ -518,12 +518,10 @@ function RequiredQuestionModal({ data, onClose, onGoToQuestion }) {
 }
 
 /* -- Complete -- */
-function CompleteScreen({ stats, confirmed, confirmedSnapshot, sections, onExport, onRestart, onSubmit }) {
+function CompleteScreen({ stats, sections, onExport, onRestart, onSubmit }) {
   const [referrals, setReferrals] = useState([{ name: '', email: '', organization: '', contactNo: '' }]);
   const [submittingReferrals, setSubmittingReferrals] = useState(false);
   const [validationErrors, setValidationErrors] = useState({});
-  const sectionQuestions = sections.flatMap(section => section.qs);
-  const confirmedCount = sectionQuestions.filter(qnum => confirmed[qnum]).length;
 
   const validateEmail = (email) => {
     if (!email) return true; // Optional field
@@ -595,112 +593,82 @@ function CompleteScreen({ stats, confirmed, confirmedSnapshot, sections, onExpor
   return (
     <div className="screen-overlay complete-screen-overlay">
       <div className="screen-card complete-card-wide">
-        <div style={{ fontSize: 48, marginBottom: '0.5rem', textAlign: 'center' }}>{'\u2713'}</div>
-        <h1 style={{ textAlign: 'center' }}>Thank you!</h1>
-        <p className="subtitle" style={{ textAlign: 'center' }}>Your responses have been recorded.</p>
+        <div className="complete-hero">
+          <div className="complete-check" aria-hidden="true">{'\u2713'}</div>
+          <p className="complete-eyebrow">Submission received</p>
+          <h1>Thank you</h1>
+          <p className="subtitle">Your responses have been recorded successfully.</p>
+        </div>
         <div className="complete-stats">
           <div className="complete-stat"><div className="n">{stats.answered}</div><div>Answered</div></div>
           <div className="complete-stat"><div className="n">{stats.confirmed}</div><div>Confirmed</div></div>
           <div className="complete-stat"><div className="n">{sections.length}</div><div>Sections</div></div>
         </div>
-        {confirmedCount > 0 ? (
-          <div className="complete-summary">
-            <h2 className="complete-summary-title">Your confirmed responses</h2>
-            <p className="complete-summary-note">Below is what you confirmed during the survey (including skipped questions).</p>
-            {sections.map(s => {
-              const items = s.qs.filter(q => confirmed[q]);
-              if (!items.length) return null;
-              return (
-                <div key={s.num} className="complete-summary-section">
-                  <h3 className="complete-summary-section-title">Section {s.num}: {s.title}</h3>
-                  {items.map(qnum => {
-                    const q = QUESTIONS[qnum];
-                    return (
-                      <div key={qnum} className="complete-summary-item">
-                        <div className="complete-q-num">Q{qnum}</div>
-                        <div className="complete-q-label">{q ? q.label : ''}</div>
-                        <div className="complete-q-answer">{confirmedSnapshot[qnum] || SKIP_LABEL}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <p className="complete-summary-empty">No confirmed answers to show. Confirmed responses appear here when you use <strong>Confirm answer</strong> during the survey.</p>
-        )}
+        <div className="complete-illustration-wrap">
+          <img
+            className="complete-illustration"
+            src="/assets/thank-you-survey.jpg"
+            alt="Survey submission completed"
+            loading="eager"
+          />
+        </div>
 
-        <div className="referral-section" style={{ marginTop: '3rem', padding: '2rem', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', borderRadius: '12px', boxShadow: '0 10px 30px rgba(102, 126, 234, 0.2)' }}>
-          <h2 style={{ fontSize: '1.4rem', marginBottom: '0.5rem', color: 'white', fontWeight: 700 }}>Help Us Reach More People</h2>
-          <p style={{ fontSize: '0.95rem', color: 'rgba(255,255,255,0.9)', marginBottom: '2rem', lineHeight: '1.6' }}>
+        <div className="referral-section">
+          <h2>Help us reach more people</h2>
+          <p className="referral-intro">
             Know someone who should also take this survey? Share their contact details and help us improve the quality of this research.
           </p>
 
-          <div className="referrals-list" style={{ marginBottom: '1.5rem' }}>
+          <div className="referrals-list">
             {referrals.map((ref, index) => (
-              <div key={index} style={{ marginBottom: '1.5rem', padding: '1.5rem', backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.3)', boxShadow: '0 4px 15px rgba(0,0,0,0.1)', backdropFilter: 'blur(10px)' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-                  <label style={{ display: 'flex', flexDirection: 'column' }}>
-                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#1f2937', marginBottom: '0.5rem' }}>Name (Optional)</span>
+              <div key={index} className="referral-card">
+                <div className="referral-grid">
+                  <label className="referral-field">
+                    <span>Name (Optional)</span>
                     <input
                       type="text"
                       placeholder="Contact name"
                       value={ref.name}
                       onChange={(e) => updateReferral(index, 'name', e.target.value)}
-                      style={{ padding: '0.7rem', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '0.95rem', transition: 'all 0.3s ease', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}
-                      onFocus={(e) => e.target.style.borderColor = '#667eea'}
-                      onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
                     />
                   </label>
-                  <label style={{ display: 'flex', flexDirection: 'column' }}>
-                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#1f2937', marginBottom: '0.5rem' }}>Email (Optional)</span>
+                  <label className="referral-field">
+                    <span>Email (Optional)</span>
                     <input
                       type="email"
                       placeholder="contact@example.com"
                       value={ref.email}
                       onChange={(e) => updateReferral(index, 'email', e.target.value)}
-                      style={{ padding: '0.7rem', border: validationErrors[`${index}-email`] ? '2px solid #ef4444' : '1px solid #e5e7eb', borderRadius: '6px', fontSize: '0.95rem', transition: 'all 0.3s ease', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}
-                      onFocus={(e) => !validationErrors[`${index}-email`] && (e.target.style.borderColor = '#667eea')}
-                      onBlur={(e) => e.target.style.borderColor = validationErrors[`${index}-email`] ? '#ef4444' : '#e5e7eb'}
+                      className={validationErrors[`${index}-email`] ? 'has-error' : ''}
                     />
-                    {validationErrors[`${index}-email`] && <span style={{ fontSize: '0.75rem', color: '#ef4444', marginTop: '0.25rem' }}>{validationErrors[`${index}-email`]}</span>}
+                    {validationErrors[`${index}-email`] && <span className="field-error">{validationErrors[`${index}-email`]}</span>}
                   </label>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-                  <label style={{ display: 'flex', flexDirection: 'column' }}>
-                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#1f2937', marginBottom: '0.5rem' }}>Organization (Optional)</span>
+                  <label className="referral-field">
+                    <span>Organization (Optional)</span>
                     <input
                       type="text"
                       placeholder="Company or organization"
                       value={ref.organization}
                       onChange={(e) => updateReferral(index, 'organization', e.target.value)}
-                      style={{ padding: '0.7rem', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '0.95rem', transition: 'all 0.3s ease', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}
-                      onFocus={(e) => e.target.style.borderColor = '#667eea'}
-                      onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
                     />
                   </label>
-                  <label style={{ display: 'flex', flexDirection: 'column' }}>
-                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#1f2937', marginBottom: '0.5rem' }}>Contact No (Optional)</span>
+                  <label className="referral-field">
+                    <span>Contact No (Optional)</span>
                     <input
                       type="tel"
                       placeholder="+91 XXXXX XXXXX"
                       value={ref.contactNo}
                       onChange={(e) => updateReferral(index, 'contactNo', e.target.value)}
-                      style={{ padding: '0.7rem', border: validationErrors[`${index}-contactNo`] ? '2px solid #ef4444' : '1px solid #e5e7eb', borderRadius: '6px', fontSize: '0.95rem', transition: 'all 0.3s ease', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}
-                      onFocus={(e) => !validationErrors[`${index}-contactNo`] && (e.target.style.borderColor = '#667eea')}
-                      onBlur={(e) => e.target.style.borderColor = validationErrors[`${index}-contactNo`] ? '#ef4444' : '#e5e7eb'}
+                      className={validationErrors[`${index}-contactNo`] ? 'has-error' : ''}
                     />
-                    {validationErrors[`${index}-contactNo`] && <span style={{ fontSize: '0.75rem', color: '#ef4444', marginTop: '0.25rem' }}>{validationErrors[`${index}-contactNo`]}</span>}
+                    {validationErrors[`${index}-contactNo`] && <span className="field-error">{validationErrors[`${index}-contactNo`]}</span>}
                   </label>
                 </div>
                 {referrals.length > 1 && (
                   <button
                     type="button"
                     onClick={() => removeReferral(index)}
-                    style={{ fontSize: '0.85rem', color: '#667eea', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0, fontWeight: 500, transition: 'color 0.2s' }}
-                    onMouseEnter={(e) => e.target.style.color = '#764ba2'}
-                    onMouseLeave={(e) => e.target.style.color = '#667eea'}
+                    className="referral-remove"
                   >
                     Remove this contact
                   </button>
@@ -712,23 +680,21 @@ function CompleteScreen({ stats, confirmed, confirmedSnapshot, sections, onExpor
           <button
             type="button"
             onClick={addReferral}
-            style={{ fontSize: '0.9rem', padding: '0.7rem 1.2rem', backgroundColor: 'rgba(255,255,255,0.2)', color: 'white', border: '1px solid rgba(255,255,255,0.4)', borderRadius: '6px', cursor: 'pointer', marginBottom: '1.5rem', fontWeight: 500, transition: 'all 0.3s ease' }}
-            onMouseEnter={(e) => { e.target.style.backgroundColor = 'rgba(255,255,255,0.3)'; e.target.style.borderColor = 'rgba(255,255,255,0.6)'; }}
-            onMouseLeave={(e) => { e.target.style.backgroundColor = 'rgba(255,255,255,0.2)'; e.target.style.borderColor = 'rgba(255,255,255,0.4)'; }}
+            className="referral-add"
           >
             + Add another contact
           </button>
 
-          <div style={{ padding: '1.2rem', backgroundColor: 'rgba(255,255,255,0.15)', borderLeft: '4px solid white', borderRadius: '6px', marginTop: '1.5rem', backdropFilter: 'blur(10px)' }}>
-            <p style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.95)', margin: 0, lineHeight: '1.6', fontWeight: 500 }}>
-              <strong>🔒 Privacy Assurance:</strong> Any information shared will be kept strictly confidential and used only for the purpose of this survey. Your contacts' privacy and data security are important to us.
+          <div className="privacy-note">
+            <p>
+              <strong>Privacy assurance:</strong> Any information shared will be kept strictly confidential and used only for the purpose of this survey.
             </p>
           </div>
         </div>
 
-        <div className="complete-actions" style={{ marginTop: '2rem' }}>
+        <div className="complete-actions">
           <button type="button" className="btn-primary" onClick={onExport}>Download PDF</button>
-          <button type="button" className="btn-secondary" onClick={submitReferrals} disabled={submittingReferrals} style={{ marginRight: 8 }}>
+          <button type="button" className="btn-secondary" onClick={submitReferrals} disabled={submittingReferrals}>
             {submittingReferrals ? 'Saving...' : 'Share Contacts & Finish'}
           </button>
           <button type="button" className="btn-secondary" onClick={onRestart}>Start over</button>
@@ -802,6 +768,7 @@ export default function App({ initialScreen = 'welcome', respondent, onFinish })
   const saveDraft = useCallback((showMsg) => {
     try {
       const draftData = {
+        respondentKey: getRespondentDraftKey(respondent),
         answers, confirmed, confirmedSnapshot, autofilled, skipped, currentSectionIdx: sectionIdx, savedAt: Date.now()
       };
       const draftSavedLocally = safeStorage.setItem(STORAGE_KEY, JSON.stringify(draftData));
@@ -822,14 +789,9 @@ export default function App({ initialScreen = 'welcome', respondent, onFinish })
   }, [saveDraft]);
 
   useEffect(() => {
-    const d = safeStorage.getItem(STORAGE_KEY);
-    if (d) {
-      try {
-        const p = JSON.parse(d);
-        if (Object.keys(p.answers || {}).length > 2) setHasDraft(true);
-      } catch { /* ignore */ }
-    }
-  }, []);
+    const draft = readDraftForRespondent(STORAGE_KEY, respondent);
+    setHasDraft(Object.keys(draft?.answers || {}).length > 2);
+  }, [respondent]);
 
   const applyDraft = (draft) => {
     const ans = draft.answers || {};
@@ -1065,13 +1027,13 @@ export default function App({ initialScreen = 'welcome', respondent, onFinish })
         <WelcomeScreen
           hasDraft={hasDraft}
           onStart={() => {
-            const d = safeStorage.getItem(STORAGE_KEY);
-            if (d) try { applyDraft(JSON.parse(d)); } catch { /* */ }
+            const draft = readDraftForRespondent(STORAGE_KEY, respondent);
+            if (draft) applyDraft(draft);
             setScreen('survey');
           }}
           onRestore={() => {
-            const d = safeStorage.getItem(STORAGE_KEY);
-            if (d) applyDraft(JSON.parse(d));
+            const draft = readDraftForRespondent(STORAGE_KEY, respondent);
+            if (draft) applyDraft(draft);
             setScreen('survey');
           }}
           onClear={() => {
@@ -1099,8 +1061,6 @@ export default function App({ initialScreen = 'welcome', respondent, onFinish })
             answered: totalAnswered,
             confirmed: activeQuestionNums.filter(qnum => confirmed[qnum]).length
           }}
-          confirmed={confirmed}
-          confirmedSnapshot={confirmedSnapshot}
           sections={activeSections}
           onExport={() => {
             const confirmedCount = activeQuestionNums.filter(qnum => confirmed[qnum]).length;

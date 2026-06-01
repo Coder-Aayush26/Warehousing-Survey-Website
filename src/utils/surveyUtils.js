@@ -11,7 +11,7 @@ export function isAnswered(qnum, answers, skipped) {
     if (q.type === 'likert') return q.rows.every((_, i) => v[i] != null && v[i] !== '');
     if (q.type === 'ranking') {
       const filled = Object.values(v).filter(Boolean).length;
-      return filled >= q.items.length;
+      return filled >= (q.rankTop || q.items.length);
     }
     return Object.keys(v).length > 0;
   }

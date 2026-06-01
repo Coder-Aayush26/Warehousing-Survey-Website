@@ -12,9 +12,17 @@
     "createdAt": "2026-05-29T03:30:09.665Z"
   },
   {
+<<<<<<< HEAD
+    "_id": "user_2j9nnhuis",
+    "username": "Dha@gmail.com",
+    "password": "$2a$10$pXbup09h.yVTR9YAsceW8ONGC4GBNRug5VMRp9rc7Oh22rC1.bFCK",
+    "createdAt": "2026-05-29T09:14:49.248Z"
+=======
     "_id": "local-admin-id",
     "username": "admin@example.com",
     "password": "$2a$10$iLJdq/H0rAxxk2qft4nS9exAcp7MqQiFxP/nmtcQzPn0Tv9OvlJQe",
     "createdAt": "2026-06-01T06:41:29.115Z"
+>>>>>>> 086f5a1adfac63b6c6164fde722297aa1b5e3fbd
   }
 ]
+
