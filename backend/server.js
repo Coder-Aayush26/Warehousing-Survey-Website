@@ -24,11 +24,19 @@ dns.setDefaultResultOrder('ipv4first');
 const PORT = process.env.PORT || 5000;
 
 // Middleware
-app.use(cors());
+// app.use(cors());
+app.use(cors({
+  origin: [
+    'http://localhost:5173',
+    'https://indianwarehousing-survey-website.vercel.app'
+  ],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  credentials: true
+}));
 app.use(express.json());
 
 // Serve frontend static files
-app.use(express.static(path.join(__dirname, '../dist')));
+// app.use(express.static(path.join(__dirname, '../dist')));
 
 // MongoDB Connection
 let mongoConnected = false;
@@ -128,9 +136,9 @@ app.use((error, req, res, next) => {
 });
 
 // Serve frontend for all other routes (SPA routing)
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../dist/index.html'));
-});
+// app.get('*', (req, res) => {
+//   res.sendFile(path.join(__dirname, '../dist/index.html'));
+// });
 
 app.listen(PORT, () => {
   console.log(`\n✓ Server running on http://localhost:${PORT}`);
