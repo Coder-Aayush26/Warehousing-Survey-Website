@@ -1,11 +1,10 @@
 services:
   - type: web
-    name: indian-warehousing-survey-backend
+    name: indian-warehousing-survey
     env: node
-    rootDir: backend
     plan: free
-    buildCommand: npm install
-    startCommand: npm start
+    buildCommand: npm install && npm run build && cd backend && npm install
+    startCommand: cd backend && npm start
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV

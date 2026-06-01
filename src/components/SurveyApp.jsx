@@ -518,12 +518,10 @@ function RequiredQuestionModal({ data, onClose, onGoToQuestion }) {
 }
 
 /* -- Complete -- */
-function CompleteScreen({ stats, confirmed, confirmedSnapshot, sections, onExport, onRestart, onSubmit }) {
+function CompleteScreen({ stats, sections, onExport, onRestart, onSubmit }) {
   const [referrals, setReferrals] = useState([{ name: '', email: '', organization: '', contactNo: '' }]);
   const [submittingReferrals, setSubmittingReferrals] = useState(false);
   const [validationErrors, setValidationErrors] = useState({});
-  const sectionQuestions = sections.flatMap(section => section.qs);
-  const confirmedCount = sectionQuestions.filter(qnum => confirmed[qnum]).length;
 
   const validateEmail = (email) => {
     if (!email) return true; // Optional field
@@ -595,112 +593,82 @@ function CompleteScreen({ stats, confirmed, confirmedSnapshot, sections, onExpor
   return (
     <div className="screen-overlay complete-screen-overlay">
       <div className="screen-card complete-card-wide">
-        <div style={{ fontSize: 48, marginBottom: '0.5rem', textAlign: 'center' }}>{'\u2713'}</div>
-        <h1 style={{ textAlign: 'center' }}>Thank you!</h1>
-        <p className="subtitle" style={{ textAlign: 'center' }}>Your responses have been recorded.</p>
+        <div className="complete-hero">
+          <div className="complete-check" aria-hidden="true">{'\u2713'}</div>
+          <p className="complete-eyebrow">Submission received</p>
+          <h1>Thank you</h1>
+          <p className="subtitle">Your responses have been recorded successfully.</p>
+        </div>
         <div className="complete-stats">
           <div className="complete-stat"><div className="n">{stats.answered}</div><div>Answered</div></div>
           <div className="complete-stat"><div className="n">{stats.confirmed}</div><div>Confirmed</div></div>
           <div className="complete-stat"><div className="n">{sections.length}</div><div>Sections</div></div>
         </div>
-        {confirmedCount > 0 ? (
-          <div className="complete-summary">
-            <h2 className="complete-summary-title">Your confirmed responses</h2>
-            <p className="complete-summary-note">Below is what you confirmed during the survey (including skipped questions).</p>
-            {sections.map(s => {
-              const items = s.qs.filter(q => confirmed[q]);
-              if (!items.length) return null;
-              return (
-                <div key={s.num} className="complete-summary-section">
-                  <h3 className="complete-summary-section-title">Section {s.num}: {s.title}</h3>
-                  {items.map(qnum => {
-                    const q = QUESTIONS[qnum];
-                    return (
-                      <div key={qnum} className="complete-summary-item">
-                        <div className="complete-q-num">Q{qnum}</div>
-                        <div className="complete-q-label">{q ? q.label : ''}</div>
-                        <div className="complete-q-answer">{confirmedSnapshot[qnum] || SKIP_LABEL}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <p className="complete-summary-empty">No confirmed answers to show. Confirmed responses appear here when you use <strong>Confirm answer</strong> during the survey.</p>
-        )}
+        <div className="complete-illustration-wrap">
+          <img
+            className="complete-illustration"
+            src="/assets/thank-you-survey.jpg"
+            alt="Survey submission completed"
+            loading="eager"
+          />
+        </div>
 
-        <div className="referral-section" style={{ marginTop: '3rem', padding: '2rem', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', borderRadius: '12px', boxShadow: '0 10px 30px rgba(102, 126, 234, 0.2)' }}>
-          <h2 style={{ fontSize: '1.4rem', marginBottom: '0.5rem', color: 'white', fontWeight: 700 }}>Help Us Reach More People</h2>
-          <p style={{ fontSize: '0.95rem', color: 'rgba(255,255,255,0.9)', marginBottom: '2rem', lineHeight: '1.6' }}>
+        <div className="referral-section">
+          <h2>Help us reach more people</h2>
+          <p className="referral-intro">
             Know someone who should also take this survey? Share their contact details and help us improve the quality of this research.
           </p>
 
-          <div className="referrals-list" style={{ marginBottom: '1.5rem' }}>
+          <div className="referrals-list">
             {referrals.map((ref, index) => (
-              <div key={index} style={{ marginBottom: '1.5rem', padding: '1.5rem', backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.3)', boxShadow: '0 4px 15px rgba(0,0,0,0.1)', backdropFilter: 'blur(10px)' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-                  <label style={{ display: 'flex', flexDirection: 'column' }}>
-                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#1f2937', marginBottom: '0.5rem' }}>Name (Optional)</span>
+              <div key={index} className="referral-card">
+                <div className="referral-grid">
+                  <label className="referral-field">
+                    <span>Name (Optional)</span>
                     <input
                       type="text"
                       placeholder="Contact name"
                       value={ref.name}
                       onChange={(e) => updateReferral(index, 'name', e.target.value)}
-                      style={{ padding: '0.7rem', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '0.95rem', transition: 'all 0.3s ease', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}
-                      onFocus={(e) => e.target.style.borderColor = '#667eea'}
-                      onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
                     />
                   </label>
-                  <label style={{ display: 'flex', flexDirection: 'column' }}>
-                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#1f2937', marginBottom: '0.5rem' }}>Email (Optional)</span>
+                  <label className="referral-field">
+                    <span>Email (Optional)</span>
                     <input
                       type="email"
                       placeholder="contact@example.com"
                       value={ref.email}
                       onChange={(e) => updateReferral(index, 'email', e.target.value)}
-                      style={{ padding: '0.7rem', border: validationErrors[`${index}-email`] ? '2px solid #ef4444' : '1px solid #e5e7eb', borderRadius: '6px', fontSize: '0.95rem', transition: 'all 0.3s ease', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}
-                      onFocus={(e) => !validationErrors[`${index}-email`] && (e.target.style.borderColor = '#667eea')}
-                      onBlur={(e) => e.target.style.borderColor = validationErrors[`${index}-email`] ? '#ef4444' : '#e5e7eb'}
+                      className={validationErrors[`${index}-email`] ? 'has-error' : ''}
                     />
-                    {validationErrors[`${index}-email`] && <span style={{ fontSize: '0.75rem', color: '#ef4444', marginTop: '0.25rem' }}>{validationErrors[`${index}-email`]}</span>}
+                    {validationErrors[`${index}-email`] && <span className="field-error">{validationErrors[`${index}-email`]}</span>}
                   </label>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-                  <label style={{ display: 'flex', flexDirection: 'column' }}>
-                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#1f2937', marginBottom: '0.5rem' }}>Organization (Optional)</span>
+                  <label className="referral-field">
+                    <span>Organization (Optional)</span>
                     <input
                       type="text"
                       placeholder="Company or organization"
                       value={ref.organization}
                       onChange={(e) => updateReferral(index, 'organization', e.target.value)}
-                      style={{ padding: '0.7rem', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '0.95rem', transition: 'all 0.3s ease', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}
-                      onFocus={(e) => e.target.style.borderColor = '#667eea'}
-                      onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
                     />
                   </label>
-                  <label style={{ display: 'flex', flexDirection: 'column' }}>
-                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#1f2937', marginBottom: '0.5rem' }}>Contact No (Optional)</span>
+                  <label className="referral-field">
+                    <span>Contact No (Optional)</span>
                     <input
                       type="tel"
                       placeholder="+91 XXXXX XXXXX"
                       value={ref.contactNo}
                       onChange={(e) => updateReferral(index, 'contactNo', e.target.value)}
-                      style={{ padding: '0.7rem', border: validationErrors[`${index}-contactNo`] ? '2px solid #ef4444' : '1px solid #e5e7eb', borderRadius: '6px', fontSize: '0.95rem', transition: 'all 0.3s ease', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}
-                      onFocus={(e) => !validationErrors[`${index}-contactNo`] && (e.target.style.borderColor = '#667eea')}
-                      onBlur={(e) => e.target.style.borderColor = validationErrors[`${index}-contactNo`] ? '#ef4444' : '#e5e7eb'}
+                      className={validationErrors[`${index}-contactNo`] ? 'has-error' : ''}
                     />
-                    {validationErrors[`${index}-contactNo`] && <span style={{ fontSize: '0.75rem', color: '#ef4444', marginTop: '0.25rem' }}>{validationErrors[`${index}-contactNo`]}</span>}
+                    {validationErrors[`${index}-contactNo`] && <span className="field-error">{validationErrors[`${index}-contactNo`]}</span>}
                   </label>
                 </div>
                 {referrals.length > 1 && (
                   <button
                     type="button"
                     onClick={() => removeReferral(index)}
-                    style={{ fontSize: '0.85rem', color: '#667eea', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0, fontWeight: 500, transition: 'color 0.2s' }}
-                    onMouseEnter={(e) => e.target.style.color = '#764ba2'}
-                    onMouseLeave={(e) => e.target.style.color = '#667eea'}
+                    className="referral-remove"
                   >
                     Remove this contact
                   </button>
@@ -712,23 +680,21 @@ function CompleteScreen({ stats, confirmed, confirmedSnapshot, sections, onExpor
           <button
             type="button"
             onClick={addReferral}
-            style={{ fontSize: '0.9rem', padding: '0.7rem 1.2rem', backgroundColor: 'rgba(255,255,255,0.2)', color: 'white', border: '1px solid rgba(255,255,255,0.4)', borderRadius: '6px', cursor: 'pointer', marginBottom: '1.5rem', fontWeight: 500, transition: 'all 0.3s ease' }}
-            onMouseEnter={(e) => { e.target.style.backgroundColor = 'rgba(255,255,255,0.3)'; e.target.style.borderColor = 'rgba(255,255,255,0.6)'; }}
-            onMouseLeave={(e) => { e.target.style.backgroundColor = 'rgba(255,255,255,0.2)'; e.target.style.borderColor = 'rgba(255,255,255,0.4)'; }}
+            className="referral-add"
           >
             + Add another contact
           </button>
 
-          <div style={{ padding: '1.2rem', backgroundColor: 'rgba(255,255,255,0.15)', borderLeft: '4px solid white', borderRadius: '6px', marginTop: '1.5rem', backdropFilter: 'blur(10px)' }}>
-            <p style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.95)', margin: 0, lineHeight: '1.6', fontWeight: 500 }}>
-              <strong>🔒 Privacy Assurance:</strong> Any information shared will be kept strictly confidential and used only for the purpose of this survey. Your contacts' privacy and data security are important to us.
+          <div className="privacy-note">
+            <p>
+              <strong>Privacy assurance:</strong> Any information shared will be kept strictly confidential and used only for the purpose of this survey.
             </p>
           </div>
         </div>
 
-        <div className="complete-actions" style={{ marginTop: '2rem' }}>
+        <div className="complete-actions">
           <button type="button" className="btn-primary" onClick={onExport}>Download PDF</button>
-          <button type="button" className="btn-secondary" onClick={submitReferrals} disabled={submittingReferrals} style={{ marginRight: 8 }}>
+          <button type="button" className="btn-secondary" onClick={submitReferrals} disabled={submittingReferrals}>
             {submittingReferrals ? 'Saving...' : 'Share Contacts & Finish'}
           </button>
           <button type="button" className="btn-secondary" onClick={onRestart}>Start over</button>
@@ -1095,8 +1061,6 @@ export default function App({ initialScreen = 'welcome', respondent, onFinish })
             answered: totalAnswered,
             confirmed: activeQuestionNums.filter(qnum => confirmed[qnum]).length
           }}
-          confirmed={confirmed}
-          confirmedSnapshot={confirmedSnapshot}
           sections={activeSections}
           onExport={() => {
             const confirmedCount = activeQuestionNums.filter(qnum => confirmed[qnum]).length;
