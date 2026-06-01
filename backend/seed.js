@@ -1,8 +1,14 @@
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import User from './models/User.js';
 
-dotenv.config();
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Match server.js env loading: shared root values first, backend overrides second.
+dotenv.config({ path: path.join(__dirname, '../.env') });
+dotenv.config({ path: path.join(__dirname, '.env'), override: true });
 
 async function seed() {
   const adminUsername = process.env.ADMIN_USERNAME?.trim();
