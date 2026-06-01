@@ -1,9 +1,11 @@
 import jwt from 'jsonwebtoken';
 import { getJwtSecret } from '../config/jwt.js';
 
+const DEFAULT_ADMIN_USERNAME = 'admin@gmail.com';
+
 export const isAdminUsername = (username) => {
-  const adminUsername = process.env.ADMIN_USERNAME?.trim();
-  return Boolean(adminUsername && username === adminUsername);
+  const adminUsername = process.env.ADMIN_USERNAME?.trim() || DEFAULT_ADMIN_USERNAME;
+  return String(username || '').trim().toLowerCase() === adminUsername.toLowerCase();
 };
 
 export const verifyToken = (req, res, next) => {
@@ -22,7 +24,7 @@ export const verifyToken = (req, res, next) => {
 };
 
 export const requireAdmin = (req, res, next) => {
-  const adminUsername = process.env.ADMIN_USERNAME?.trim();
+  const adminUsername = process.env.ADMIN_USERNAME?.trim() || DEFAULT_ADMIN_USERNAME;
 
   if (!adminUsername) {
     return res.status(500).json({ error: 'Admin username is not configured' });

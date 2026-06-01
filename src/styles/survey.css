@@ -397,11 +397,10 @@ body {
 .likert-btn:nth-child(1).selected { background: linear-gradient(135deg, #ef4444, #f87171); border-color: #ef4444; }
 .likert-btn:nth-child(5).selected { background: linear-gradient(135deg, var(--success), #34d399); border-color: var(--success); }
 
-/* Tap-to-rank questions */
+/* Select-based ranking */
 .rank-dnd-hint {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
   font-size: 12px;
   color: var(--accent-hover);
@@ -411,42 +410,6 @@ body {
   border-radius: var(--radius-sm);
   border: 1px solid #bfdbfe;
 }
-.rank-dnd-count {
-  color: var(--accent);
-  font-weight: 700;
-  white-space: nowrap;
-}
-.rank-dnd-progress {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 12px;
-  font-size: 12px;
-}
-.rank-dnd-progress-label { color: var(--text-muted); font-weight: 500; min-width: 48px; }
-.rank-dnd-progress-track {
-  flex: 1;
-  height: 8px;
-  background: var(--border);
-  border-radius: 4px;
-  overflow: hidden;
-}
-.rank-dnd-progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, var(--gold), var(--orange), var(--accent));
-  border-radius: 4px;
-  transition: width 0.35s ease;
-}
-.rank-dnd-progress-count { font-weight: 600; color: var(--accent); min-width: 40px; text-align: right; }
-.rank-zone-label {
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  padding: 8px 4px 4px;
-  margin-top: 4px;
-}
-.rank-zone-ranked { color: var(--accent); }
 .rank-dnd-note {
   font-size: 12px;
   color: var(--purple);
@@ -455,13 +418,6 @@ body {
   padding: 8px 12px;
   border-radius: var(--radius-sm);
   margin-bottom: 12px;
-}
-.rank-complete-note {
-  margin-top: 12px;
-  margin-bottom: 0;
-  color: var(--success);
-  background: var(--success-bg);
-  border-color: #bbf7d0;
 }
 .rank-priority-tag {
   font-size: 10px;
@@ -492,34 +448,11 @@ body {
   background: var(--bg);
   cursor: default;
   transition: all var(--transition);
-  user-select: none;
 }
 .rank-dnd-item:hover { border-color: var(--accent); box-shadow: var(--shadow-sm); }
 .rank-dnd-item.ranked-top {
   border-color: #93c5fd;
   background: linear-gradient(90deg, #fff 0%, #f8fafc 100%);
-}
-.rank-dnd-item.ranked-pool {
-  opacity: 0.92;
-  background: var(--bg-soft);
-  border-style: dashed;
-}
-.rank-pool-tag {
-  font-size: 10px;
-  background: var(--orange-bg);
-  color: var(--orange);
-  padding: 3px 8px;
-  border-radius: 20px;
-  flex-shrink: 0;
-  font-weight: 500;
-}
-.rank-drag-handle {
-  color: var(--purple);
-  font-size: 18px;
-  line-height: 1;
-  padding: 0 4px;
-  cursor: grab;
-  opacity: 0.7;
 }
 .rank-badge {
   min-width: 40px;
@@ -561,88 +494,60 @@ body {
   border: 1px dashed var(--border-strong);
 }
 .rank-dnd-label { flex: 1; font-size: 14px; line-height: 1.4; min-width: 0; overflow-wrap: anywhere; }
-.rank-section-heading {
+.rank-select-control {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin: 12px 0 8px;
-  color: var(--text-muted);
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-.rank-empty {
-  padding: 14px;
-  border: 1px dashed var(--border-strong);
-  border-radius: var(--radius-md);
-  color: var(--text-muted);
-  font-size: 13px;
-  background: var(--bg-soft);
-}
-.rank-choice-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
-}
-.rank-choice {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 54px;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--bg);
-  color: var(--text);
-  font-size: 14px;
-  line-height: 1.35;
-  text-align: left;
-  font-family: inherit;
-  cursor: pointer;
-  transition: all var(--transition);
-}
-.rank-choice:hover {
-  border-color: var(--accent);
-  background: var(--bg-info);
-  box-shadow: var(--shadow-sm);
-}
-.rank-choice:focus-visible,
-.rank-actions button:focus-visible,
-.rank-reset-btn:focus-visible {
-  outline: 3px solid rgba(24,95,165,.18);
-  outline-offset: 2px;
-}
-.rank-choice:disabled,
-.rank-actions button:disabled,
-.rank-reset-btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
-}
-.rank-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
   flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
 }
-.rank-actions button,
-.rank-reset-btn {
+.rank-select-control select {
+  min-width: 92px;
+  height: 38px;
+  padding: 0 34px 0 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--bg);
-  color: var(--accent);
-  font-size: 12px;
-  font-weight: 600;
-  font-family: inherit;
-  padding: 6px 9px;
+  color: var(--text);
+  font: inherit;
   cursor: pointer;
-  transition: all var(--transition);
+  transition: border-color var(--transition), box-shadow var(--transition);
 }
-.rank-actions button:hover:not(:disabled),
-.rank-reset-btn:hover:not(:disabled) {
+.rank-select-control select:hover {
   border-color: var(--accent);
-  background: var(--bg-info);
+}
+.rank-select-control select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(24,95,165,.12);
+}
+.rank-order-preview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-soft);
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.rank-order-preview > span:first-child {
+  font-weight: 700;
+  color: var(--accent);
+}
+.rank-order-chip {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 textarea.open-q {
@@ -1123,22 +1028,12 @@ textarea.open-q:focus {
     line-height: 1.35;
   }
 
-  .rank-dnd-hint {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
   .rank-dnd-item {
-    align-items: flex-start;
+    align-items: stretch;
+    flex-wrap: wrap;
     gap: 8px;
     padding: 10px;
     min-width: 0;
-    flex-wrap: wrap;
-  }
-
-  .rank-drag-handle {
-    padding: 0 2px;
-    flex-shrink: 0;
   }
 
   .rank-badge {
@@ -1158,25 +1053,22 @@ textarea.open-q:focus {
   .rank-dnd-label {
     font-size: 13px;
     flex-basis: calc(100% - 44px);
+    align-self: center;
   }
 
-  .rank-actions {
+  .rank-select-control {
     width: 100%;
+    justify-content: space-between;
     padding-left: 40px;
   }
 
-  .rank-actions button {
-    flex: 1;
-    min-height: 34px;
+  .rank-select-control select {
+    min-width: 128px;
+    height: 42px;
   }
 
-  .rank-choice-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .rank-choice {
-    min-height: 50px;
-    font-size: 13px;
+  .rank-order-preview {
+    font-size: 11px;
   }
 
   textarea.open-q {

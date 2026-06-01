@@ -7,7 +7,6 @@ import { getJwtSecret } from '../config/jwt.js';
 import { isAdminUsername, verifyToken } from '../middleware/auth.js';
 
 const router = express.Router();
-
 // ── GET /api/auth/me ──────────────────────────────────────────────────────────
 // Validates the bearer token and returns the logged-in user's info.
 // The frontend calls this once on page load to silently restore the session.
