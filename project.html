@@ -116,7 +116,7 @@ function getRankBadgeClass(rank) {
 function typeHint(q) {
   if (q.type === 'mcq') return q.single ? (q.maxSelect ? `Select up to ${q.maxSelect}` : 'Single choice') : 'Multiple choice';
   if (q.type === 'likert') return 'Rate 1 (low) to 5 (high)';
-  if (q.type === 'ranking') return q.rankTop ? `Drag to reorder - top ${q.rankTop} highlighted` : 'Drag to order by priority';
+  if (q.type === 'ranking') return q.rankTop ? `Use dropdowns to rank - top ${q.rankTop} highlighted` : 'Use dropdowns to order by priority';
   if (q.type === 'open') return 'Open text';
   return '';
 }
@@ -211,6 +211,134 @@ function ToastContainer({ toasts }) {
       {toasts.map(t => (
         <div key={t.id} className={`toast${t.type ? ' ' + t.type : ''}`}>{t.msg}</div>
       ))}
+    </div>
+  );
+}
+
+/* -- Dropdown ranking -- */
+function RankingDropdown({ q, value, onChange, disabled }) {
+  const defaultOrder = defaultRankingOrder(q.items);
+  const rankTop = q.rankTop != null ? q.rankTop : q.items.length;
+
+  useEffect(() => {
+    const rankCount = value ? Object.keys(value).filter(k => value[k]).length : 0;
+    if (rankCount < q.items.length) {
+      const initial = rankMapFromOrder(defaultOrder);
+      onChange(initial);
+    }
+  }, [q.label]);
+
+  const onSelectRank = (itemIdx, rankValue) => {
+    if (disabled) return;
+    const newRankMap = value ? { ...value } : {};
+    
+    if (rankValue === '') {
+      delete newRankMap[itemIdx];
+    } else {
+      let swapItem = null;
+      for (const key in newRankMap) {
+        if (newRankMap[key] === rankValue && key !== String(itemIdx)) {
+          swapItem = key;
+          break;
+        }
+      }
+      
+      if (swapItem !== null) {
+        const currentRankOfSelectedItem = newRankMap[itemIdx];
+        newRankMap[swapItem] = currentRankOfSelectedItem || '';
+      }
+      
+      newRankMap[itemIdx] = rankValue;
+    }
+    onChange(newRankMap);
+  };
+
+  const getRankForItem = (itemIdx) => {
+    return value && value[itemIdx] ? value[itemIdx] : '';
+  };
+
+  // Get items ordered by their assigned rank
+  const getOrderedItems = () => {
+    const items = q.items.map((_, i) => ({ idx: i, rank: getRankForItem(i) }));
+    return items.sort((a, b) => {
+      const ra = parseInt(a.rank, 10) || 999;
+      const rb = parseInt(b.rank, 10) || 999;
+      return ra - rb;
+    });
+  };
+
+  const renderRankRow = (position, itemData) => {
+    const itemIdx = itemData.idx;
+    const currentRank = getRankForItem(itemIdx);
+    const isPriority = q.rankTop != null && parseInt(currentRank, 10) <= rankTop && currentRank;
+    const badgeClass = getRankBadgeClass(position);
+    
+    return (
+      <div
+        key={itemIdx}
+        className={`rank-select-row ranked-top${isPriority ? ' rank-priority' : ' rank-rest'}`}
+      >
+        <span
+          className={`rank-badge ${badgeClass}`}
+          aria-label={`Position ${position}`}
+        >
+          {position}
+        </span>
+        <span className="rank-option-label">{q.items[itemIdx]}</span>
+        <div className="rank-select-wrapper">
+          <label className="rank-label">Rank:</label>
+          <select
+            className="rank-select"
+            value={currentRank}
+            disabled={disabled}
+            aria-label={`Select rank for ${q.items[itemIdx]}`}
+            onChange={(e) => onSelectRank(itemIdx, e.target.value)}
+          >
+            <option value="">—</option>
+            {q.items.map((_, rankNum) => {
+              const rankValue = String(rankNum + 1);
+              return (
+                <option key={rankValue} value={rankValue}>
+                  {rankValue}
+                </option>
+              );
+            })}
+          </select>
+        </div>
+        {q.rankTop != null && parseInt(currentRank, 10) <= rankTop && currentRank && (
+          <span className="rank-priority-tag">Top {rankTop}</span>
+        )}
+      </div>
+    );
+  };
+
+  const orderedItems = getOrderedItems();
+
+  return (
+    <div className="rank-dnd">
+      <div className="rank-dnd-hint">
+        <span>
+          {q.rankTop != null
+            ? `Select ranks 1-${rankTop} for your top ${rankTop} priorities.`
+            : `Select rank numbers for each item (1 = highest priority).`}
+        </span>
+      </div>
+      {q.rankTop != null && q.items.length > rankTop && (
+        <div className="rank-dnd-note">
+          Items ranked 1-{rankTop} are highlighted as your top priorities.
+        </div>
+      )}
+      <div className="rank-select-list">
+        {orderedItems.map((item, position) => renderRankRow(position + 1, item))}
+      </div>
+      <div className="rank-current-order" aria-live="polite">
+        <div className="rank-current-title">Current ranking</div>
+        <ol className="rank-current-list">
+          {orderedItems.map((item) => (
+            <li key={item.idx}>{q.items[item.idx]}</li>
+          ))}
+        </ol>
+      </div>
     </div>
   );
 }
@@ -430,7 +558,7 @@ function QuestionBlock({ qnum, answers, confirmed, autofilled, skipped, onAnswer
         <LikertQuestion q={q} value={value} onChange={onAnswer} disabled={false} />
       )}
       {q.type === 'ranking' && (
-        <RankingDragDrop q={q} value={value} onChange={onAnswer} disabled={false} />
+        <RankingDropdown q={q} value={value} onChange={onAnswer} disabled={false} />
       )}
       {q.type === 'open' && (
         <>
